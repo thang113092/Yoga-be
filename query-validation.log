@@ -1,0 +1,239 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] Yoga Multi-Branch Management System                                [pom]
+[INFO] Common Shared Kernel                                               [jar]
+[INFO] Module Branch                                                      [jar]
+[INFO] Module Identity                                                    [jar]
+[INFO] Module Membership                                                  [jar]
+[INFO] Module Schedule & Booking                                          [jar]
+[INFO] Yoga App Executable                                                [jar]
+[INFO] 
+[INFO] --------------< com.company.yoga:yoga-management-system >---------------
+[INFO] Building Yoga Multi-Branch Management System 1.0.0-SNAPSHOT        [1/7]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ----------------------< com.company.yoga:common >-----------------------
+[INFO] Building Common Shared Kernel 1.0.0-SNAPSHOT                       [2/7]
+[INFO]   from common\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ common ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\common\src\main\resources
+[INFO] skip non existing resourceDirectory D:\DA\backend\common\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ common ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ common ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\common\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ common ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ common ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] --------------------< com.company.yoga:mod-branch >---------------------
+[INFO] Building Module Branch 1.0.0-SNAPSHOT                              [3/7]
+[INFO]   from mod-branch\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mod-branch ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-branch\src\main\resources
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-branch\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ mod-branch ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mod-branch ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-branch\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ mod-branch ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ mod-branch ---
+[INFO] No tests to run.
+[INFO] 
+[INFO] -------------------< com.company.yoga:mod-identity >--------------------
+[INFO] Building Module Identity 1.0.0-SNAPSHOT                            [4/7]
+[INFO]   from mod-identity\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mod-identity ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-identity\src\main\resources
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-identity\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ mod-identity ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mod-identity ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-identity\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ mod-identity ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ mod-identity ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.company.yoga.identity.account.service.AccessPolicyTest
+WARNING: A Java agent has been loaded dynamically (C:\Users\Admin\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.19\byte-buddy-agent-1.14.19.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction (file:/C:/Users/Admin/.m2/repository/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.jar)
+WARNING: Please consider reporting this to the maintainers of class net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.715 s -- in com.company.yoga.identity.account.service.AccessPolicyTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] ------------------< com.company.yoga:mod-membership >-------------------
+[INFO] Building Module Membership 1.0.0-SNAPSHOT                          [5/7]
+[INFO]   from mod-membership\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mod-membership ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-membership\src\main\resources
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-membership\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ mod-membership ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mod-membership ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-membership\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ mod-membership ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ mod-membership ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.company.yoga.membership.order.service.PaymentServiceTest
+WARNING: A Java agent has been loaded dynamically (C:\Users\Admin\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.19\byte-buddy-agent-1.14.19.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction (file:/C:/Users/Admin/.m2/repository/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.jar)
+WARNING: Please consider reporting this to the maintainers of class net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.872 s -- in com.company.yoga.membership.order.service.PaymentServiceTest
+[INFO] Running com.company.yoga.membership.order.service.PosOrderServiceTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.051 s -- in com.company.yoga.membership.order.service.PosOrderServiceTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] -------------------< com.company.yoga:mod-schedule >--------------------
+[INFO] Building Module Schedule & Booking 1.0.0-SNAPSHOT                  [6/7]
+[INFO]   from mod-schedule\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ mod-schedule ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-schedule\src\main\resources
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-schedule\src\main\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ mod-schedule ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 25 source files with javac [debug parameters release 21] to target\classes
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by lombok.permit.Permit
+WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ mod-schedule ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\mod-schedule\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ mod-schedule ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 3 source files with javac [debug parameters release 21] to target\test-classes
+[INFO] /D:/DA/backend/mod-schedule/src/test/java/com/company/yoga/schedule/booking/service/RepositoryQueryTest.java: D:\DA\backend\mod-schedule\src\test\java\com\company\yoga\schedule\booking\service\RepositoryQueryTest.java uses or overrides a deprecated API.
+[INFO] /D:/DA/backend/mod-schedule/src/test/java/com/company/yoga/schedule/booking/service/RepositoryQueryTest.java: Recompile with -Xlint:deprecation for details.
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ mod-schedule ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.company.yoga.schedule.booking.service.BookingServiceTest
+WARNING: A Java agent has been loaded dynamically (C:\Users\Admin\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.19\byte-buddy-agent-1.14.19.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction (file:/C:/Users/Admin/.m2/repository/net/bytebuddy/byte-buddy/1.14.19/byte-buddy-1.14.19.jar)
+WARNING: Please consider reporting this to the maintainers of class net.bytebuddy.dynamic.loading.ClassInjector$UsingUnsafe$Dispatcher$CreationAction
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.863 s -- in com.company.yoga.schedule.booking.service.BookingServiceTest
+[INFO] Running com.company.yoga.schedule.booking.service.CheckInServiceTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.061 s -- in com.company.yoga.schedule.booking.service.CheckInServiceTest
+[INFO] Running com.company.yoga.schedule.booking.service.RepositoryQueryTest
+09:21:05.789 [main] INFO org.hibernate.Version -- HHH000412: Hibernate ORM core version 6.5.3.Final
+09:21:05.823 [main] INFO org.hibernate.cache.internal.RegionFactoryInitiator -- HHH000026: Second-level cache disabled
+09:21:05.919 [main] WARN org.hibernate.orm.deprecation -- HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+09:21:06.224 [main] INFO org.hibernate.validator.internal.util.Version -- HV000001: Hibernate Validator 8.0.1.Final
+09:21:06.445 [main] WARN org.hibernate.engine.jdbc.connections.internal.ConnectionProviderInitiator -- HHH000181: No appropriate connection provider encountered, assuming application will be supplying connections
+09:21:06.656 [main] INFO org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformInitiator -- HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.223 s -- in com.company.yoga.schedule.booking.service.RepositoryQueryTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] ------------------------< com.company.yoga:app >------------------------
+[INFO] Building Yoga App Executable 1.0.0-SNAPSHOT                        [7/7]
+[INFO]   from app\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ app ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 5 source files with javac [debug parameters release 21] to target\classes
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ app ---
+[INFO] skip non existing resourceDirectory D:\DA\backend\app\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ app ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.2.5:test (default-test) @ app ---
+[INFO] No tests to run.
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Yoga Multi-Branch Management System 1.0.0-SNAPSHOT:
+[INFO] 
+[INFO] Yoga Multi-Branch Management System ................ SUCCESS [  0.002 s]
+[INFO] Common Shared Kernel ............................... SUCCESS [  1.050 s]
+[INFO] Module Branch ...................................... SUCCESS [  0.093 s]
+[INFO] Module Identity .................................... SUCCESS [  1.506 s]
+[INFO] Module Membership .................................. SUCCESS [  1.524 s]
+[INFO] Module Schedule & Booking .......................... SUCCESS [  5.314 s]
+[INFO] Yoga App Executable ................................ SUCCESS [  0.823 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  10.649 s
+[INFO] Finished at: 2026-10-03T09:21:07+07:00
+[INFO] ------------------------------------------------------------------------

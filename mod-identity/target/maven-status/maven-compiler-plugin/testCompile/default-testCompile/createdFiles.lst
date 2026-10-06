@@ -1,0 +1,3 @@
+com\company\yoga\identity\account\service\SupabaseProfileServiceTest.class
+com\company\yoga\identity\account\service\SupabaseAuthGatewayTest.class
+com\company\yoga\identity\account\service\AccessPolicyTest.class

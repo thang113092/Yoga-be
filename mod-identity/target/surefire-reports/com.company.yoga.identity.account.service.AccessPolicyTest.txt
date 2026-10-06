@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.company.yoga.identity.account.service.AccessPolicyTest
+-------------------------------------------------------------------------------
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.670 s -- in com.company.yoga.identity.account.service.AccessPolicyTest

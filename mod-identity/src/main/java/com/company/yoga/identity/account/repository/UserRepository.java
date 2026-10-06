@@ -24,4 +24,22 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
 
     @org.springframework.data.jpa.repository.Query("SELECT u FROM UserEntity u WHERE u.passwordHash <> '!DELETED' ORDER BY u.createdAt DESC")
     java.util.List<UserEntity> findAllByOrderByCreatedAtDesc();
+
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT u FROM UserEntity u
+        WHERE u.isActive = true
+          AND u.passwordHash <> '!DELETED'
+          AND u.roleId = :studentRoleId
+          AND (
+            LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%'))
+            OR u.phone LIKE CONCAT('%', :query, '%')
+            OR (u.email IS NOT NULL AND LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')))
+          )
+        ORDER BY u.fullName ASC
+    """)
+    java.util.List<UserEntity> searchStudents(
+            @org.springframework.data.repository.query.Param("query") String query,
+            @org.springframework.data.repository.query.Param("studentRoleId") UUID studentRoleId,
+            org.springframework.data.domain.Pageable pageable
+    );
 }

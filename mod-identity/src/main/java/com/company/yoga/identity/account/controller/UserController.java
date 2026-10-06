@@ -27,20 +27,35 @@ public class UserController {
 
     @GetMapping("/students/lookup")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
-    public ApiResponse<UserDto.UserResponse> lookupStudent(@RequestParam String phone, @RequestParam UUID branchId) {
-        return ApiResponse.success(userService.lookupStudent(phone, branchId));
+    public ApiResponse<UserDto.UserResponse> lookupStudent(
+            @RequestParam(required = false) String phone,
+            @RequestParam(required = false) String email,
+            @RequestParam UUID branchId
+    ) {
+        return ApiResponse.success(userService.lookupStudent(phone, email, branchId));
+    }
+
+    @GetMapping("/students/search")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    @Operation(summary = "Tìm kiếm danh sách học viên theo tên, SĐT hoặc email")
+    public ApiResponse<List<UserDto.UserResponse>> searchStudents(
+            @RequestParam String query,
+            @RequestParam UUID branchId,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ApiResponse.success(userService.searchStudents(query, branchId, limit));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER')")
-    @Operation(summary = "Tạo tài khoản mới (Super Admin tạo mọi role, Branch Manager chỉ tạo RECEPTIONIST/INSTRUCTOR/STUDENT thuộc chi nhánh của mình)")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    @Operation(summary = "Tạo tài khoản mới (Super Admin tạo mọi role, Branch Manager tạo RECEPTIONIST/INSTRUCTOR/STUDENT, Receptionist tạo STUDENT không cần cơ sở)")
     public ApiResponse<UserDto.UserResponse> createUser(@Valid @RequestBody UserDto.CreateUserRequest request) {
         UserDto.UserResponse resp = userService.createUser(request);
         return ApiResponse.success(resp, "Tạo tài khoản thành công");
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     @Operation(summary = "Lấy danh sách người dùng theo phân quyền")
     public ApiResponse<List<UserDto.UserResponse>> getUsers(
             @RequestParam(required = false) String branchId,

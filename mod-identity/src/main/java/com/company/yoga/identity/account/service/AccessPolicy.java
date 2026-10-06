@@ -53,7 +53,7 @@ public class AccessPolicy {
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.NOT_FOUND));
         if (!"STUDENT".equals(role(student))) throw new BusinessException(CommonErrorCode.BAD_REQUEST);
         String callerRole = role(caller);
-        if ("SUPER_ADMIN".equals(callerRole)) return;
+        if ("SUPER_ADMIN".equals(callerRole) || "RECEPTIONIST".equals(callerRole)) return;
         if ("BRANCH_MANAGER".equals(callerRole) && student.getHomeBranchId() == null) return;
         requireStaffBranch(student.getHomeBranchId());
     }

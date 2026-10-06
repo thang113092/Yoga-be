@@ -173,4 +173,182 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.updateUserStatus(otherBranchStudent.getId(), false))
                 .isInstanceOf(BusinessException.class);
     }
+
+    @Test
+    void lookupStudent_byPhone_success() {
+        UUID studentRoleId = UUID.randomUUID();
+        RoleEntity studentRole = new RoleEntity();
+        studentRole.setId(studentRoleId);
+        studentRole.setCode("STUDENT");
+
+        UserEntity student = new UserEntity();
+        student.setId(UUID.randomUUID());
+        student.setPhone("0987654321");
+        student.setEmail("student@gmail.com");
+        student.setFullName("Nguyen Van A");
+        student.setRoleId(studentRoleId);
+        student.setIsActive(true);
+
+        when(userRepository.findByPhone("0987654321")).thenReturn(Optional.of(student));
+        when(roleRepository.findById(studentRoleId)).thenReturn(Optional.of(studentRole));
+
+        UserDto.UserResponse resp = userService.lookupStudent("0987654321", null, managerBranchId);
+
+        assertThat(resp.fullName()).isEqualTo("Nguyen Van A");
+        assertThat(resp.phone()).isEqualTo("0987654321");
+        assertThat(resp.email()).isEqualTo("student@gmail.com");
+    }
+
+    @Test
+    void lookupStudent_byEmail_success() {
+        UUID studentRoleId = UUID.randomUUID();
+        RoleEntity studentRole = new RoleEntity();
+        studentRole.setId(studentRoleId);
+        studentRole.setCode("STUDENT");
+
+        UserEntity student = new UserEntity();
+        student.setId(UUID.randomUUID());
+        student.setPhone("0987654321");
+        student.setEmail("student@gmail.com");
+        student.setFullName("Nguyen Van B");
+        student.setRoleId(studentRoleId);
+        student.setIsActive(true);
+
+        when(userRepository.findByEmailIgnoreCase("student@gmail.com")).thenReturn(Optional.of(student));
+        when(roleRepository.findById(studentRoleId)).thenReturn(Optional.of(studentRole));
+
+        UserDto.UserResponse resp = userService.lookupStudent(null, "student@gmail.com", managerBranchId);
+
+        assertThat(resp.fullName()).isEqualTo("Nguyen Van B");
+        assertThat(resp.phone()).isEqualTo("0987654321");
+        assertThat(resp.email()).isEqualTo("student@gmail.com");
+    }
+
+    @Test
+    void receptionist_getUsers_returnsOnlyStudents() {
+        UUID receptionistRoleId = UUID.randomUUID();
+        RoleEntity receptionistRole = new RoleEntity();
+        receptionistRole.setId(receptionistRoleId);
+        receptionistRole.setCode("RECEPTIONIST");
+        receptionistRole.setName("Lễ tân");
+
+        UUID studentRoleId = UUID.randomUUID();
+        RoleEntity studentRole = new RoleEntity();
+        studentRole.setId(studentRoleId);
+        studentRole.setCode("STUDENT");
+        studentRole.setName("Học viên");
+
+        callerManager.setRoleId(receptionistRoleId);
+        when(roleRepository.findById(receptionistRoleId)).thenReturn(Optional.of(receptionistRole));
+        when(roleRepository.findAll()).thenReturn(List.of(receptionistRole, studentRole));
+
+        UserEntity studentUser = new UserEntity();
+        studentUser.setId(UUID.randomUUID());
+        studentUser.setRoleId(studentRoleId);
+        studentUser.setFullName("Hoc Vien 1");
+
+        UserEntity staffUser = new UserEntity();
+        staffUser.setId(UUID.randomUUID());
+        staffUser.setRoleId(receptionistRoleId);
+        staffUser.setFullName("Le Tan 2");
+
+        when(userRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(studentUser, staffUser));
+
+        List<UserDto.UserResponse> result = userService.getUsers((String) null, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).roleCode()).isEqualTo("STUDENT");
+        assertThat(result.get(0).fullName()).isEqualTo("Hoc Vien 1");
+    }
+
+    @Test
+    void receptionist_createUser_studentWithoutBranch_success() {
+        UUID receptionistRoleId = UUID.randomUUID();
+        RoleEntity receptionistRole = new RoleEntity();
+        receptionistRole.setId(receptionistRoleId);
+        receptionistRole.setCode("RECEPTIONIST");
+
+        UUID studentRoleId = UUID.randomUUID();
+        RoleEntity studentRole = new RoleEntity();
+        studentRole.setId(studentRoleId);
+        studentRole.setCode("STUDENT");
+        studentRole.setName("Học viên");
+
+        callerManager.setRoleId(receptionistRoleId);
+        when(roleRepository.findById(receptionistRoleId)).thenReturn(Optional.of(receptionistRole));
+        when(roleRepository.findByCode("STUDENT")).thenReturn(Optional.of(studentRole));
+
+        when(userRepository.existsByPhone("0912345678")).thenReturn(false);
+        when(userRepository.existsByEmail("student@an-yen.vn")).thenReturn(false);
+        UUID authId = UUID.randomUUID();
+        when(supabase.createUser(any(), any(), any(), any())).thenReturn(authId);
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserDto.CreateUserRequest req = new UserDto.CreateUserRequest(
+                "0912345678",
+                "Password123",
+                "Le Thi Hoc Vien",
+                "student@an-yen.vn",
+                "FEMALE",
+                null,
+                "STUDENT",
+                null // Khong can chon co so
+        );
+
+        UserDto.UserResponse resp = userService.createUser(req);
+
+        assertThat(resp.fullName()).isEqualTo("Le Thi Hoc Vien");
+        assertThat(resp.homeBranchId()).isNull();
+        assertThat(resp.roleCode()).isEqualTo("STUDENT");
+    }
+
+    @Test
+    void receptionist_createUser_forbiddenForOtherRoles() {
+        UUID receptionistRoleId = UUID.randomUUID();
+        RoleEntity receptionistRole = new RoleEntity();
+        receptionistRole.setId(receptionistRoleId);
+        receptionistRole.setCode("RECEPTIONIST");
+
+        callerManager.setRoleId(receptionistRoleId);
+        when(roleRepository.findById(receptionistRoleId)).thenReturn(Optional.of(receptionistRole));
+
+        UserDto.CreateUserRequest req = new UserDto.CreateUserRequest(
+                "0912345678",
+                "Password123",
+                "Nhan Vien Khac",
+                "staff@an-yen.vn",
+                "FEMALE",
+                null,
+                "INSTRUCTOR",
+                null
+        );
+
+        assertThatThrownBy(() -> userService.createUser(req))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void searchStudents_success() {
+        UUID studentRoleId = UUID.randomUUID();
+        RoleEntity studentRole = new RoleEntity();
+        studentRole.setId(studentRoleId);
+        studentRole.setCode("STUDENT");
+
+        UserEntity student = new UserEntity();
+        student.setId(UUID.randomUUID());
+        student.setPhone("0987654321");
+        student.setEmail("search@student.com");
+        student.setFullName("Nguyen Search");
+        student.setRoleId(studentRoleId);
+        student.setIsActive(true);
+
+        when(roleRepository.findByCode("STUDENT")).thenReturn(Optional.of(studentRole));
+        when(userRepository.searchStudents(eq("Search"), eq(studentRoleId), any()))
+                .thenReturn(List.of(student));
+
+        List<UserDto.UserResponse> results = userService.searchStudents("Search", managerBranchId, 10);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).fullName()).isEqualTo("Nguyen Search");
+    }
 }

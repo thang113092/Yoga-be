@@ -37,13 +37,79 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserDto.UserResponse lookupStudent(String phone, UUID branchId) {
+        return lookupStudent(phone, null, branchId);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto.UserResponse lookupStudent(String phone, String email, UUID branchId) {
         accessPolicy.requireStaffBranch(branchId);
-        UserEntity u = userRepository.findByPhone(phone.trim()).filter(x -> Boolean.TRUE.equals(x.getIsActive()))
+        String cleanPhone = (phone != null && !phone.isBlank()) ? phone.trim() : null;
+        String cleanEmail = (email != null && !email.isBlank()) ? email.trim() : null;
+
+        if (cleanPhone == null && cleanEmail == null) {
+            throw new BusinessException(IdentityResultCodes.USER_NOT_FOUND);
+        }
+
+        if (cleanPhone != null && cleanPhone.contains("@") && cleanEmail == null) {
+            cleanEmail = cleanPhone;
+            cleanPhone = null;
+        } else if (cleanEmail != null && !cleanEmail.contains("@") && cleanPhone == null) {
+            cleanPhone = cleanEmail;
+            cleanEmail = null;
+        }
+
+        java.util.Optional<UserEntity> userOpt = java.util.Optional.empty();
+        if (cleanPhone != null) {
+            userOpt = userRepository.findByPhone(cleanPhone);
+        }
+        if (userOpt.isEmpty() && cleanEmail != null) {
+            userOpt = userRepository.findByEmailIgnoreCase(cleanEmail);
+        }
+
+        UserEntity u = userOpt.filter(x -> Boolean.TRUE.equals(x.getIsActive()))
                 .orElseThrow(() -> new BusinessException(IdentityResultCodes.USER_NOT_FOUND));
         RoleEntity role = roleRepository.findById(u.getRoleId()).orElseThrow();
         if (!"STUDENT".equals(role.getCode())) throw new BusinessException(IdentityResultCodes.FORBIDDEN_ACTION);
         String branchName = u.getHomeBranchId() == null ? null : branchRepository.findById(u.getHomeBranchId()).map(BranchEntity::getName).orElse(null);
         return new UserDto.UserResponse(u.getId(), u.getPhone(), u.getEmail(), u.getFullName(), u.getGender(), u.getDob(), role.getId(), role.getCode(), role.getName(), u.getHomeBranchId(), branchName, u.getIsActive(), u.getCreatedAt());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto.UserResponse> searchStudents(String query, UUID branchId, int limit) {
+        accessPolicy.requireStaffBranch(branchId);
+        if (query == null || query.trim().isBlank()) {
+            return List.of();
+        }
+        RoleEntity studentRole = roleRepository.findByCode("STUDENT")
+                .orElseThrow(() -> new BusinessException(IdentityResultCodes.ROLE_NOT_FOUND));
+
+        int safeLimit = Math.min(Math.max(limit, 1), 30);
+        List<UserEntity> users = userRepository.searchStudents(
+                query.trim(),
+                studentRole.getId(),
+                org.springframework.data.domain.PageRequest.of(0, safeLimit)
+        );
+
+        Map<UUID, String> branchNames = branchRepository.findAll().stream()
+                .collect(Collectors.toMap(BranchEntity::getId, BranchEntity::getName, (a, b) -> a));
+
+        return users.stream()
+                .map(u -> new UserDto.UserResponse(
+                        u.getId(),
+                        u.getPhone(),
+                        u.getEmail(),
+                        u.getFullName(),
+                        u.getGender(),
+                        u.getDob(),
+                        studentRole.getId(),
+                        studentRole.getCode(),
+                        studentRole.getName(),
+                        u.getHomeBranchId(),
+                        u.getHomeBranchId() == null ? null : branchNames.get(u.getHomeBranchId()),
+                        u.getIsActive(),
+                        u.getCreatedAt()
+                ))
+                .toList();
     }
 
     private static final Set<String> MANAGER_ALLOWED_ROLES = Set.of("RECEPTIONIST", "INSTRUCTOR", "STUDENT");
@@ -74,14 +140,40 @@ public class UserService {
                 throw new BusinessException(IdentityResultCodes.INVALID_ROLE_ASSIGNMENT);
             }
 
-            // Kiểm tra chi nhánh: phải là chi nhánh mà Manager phụ trách
-            UUID managerBranchId = currentUser.getHomeBranchId();
-            if (managerBranchId == null || !managerBranchId.equals(request.homeBranchId())) {
-                // Kiểm tra xem Manager có được phân công phụ trách branch này trong user_branches không
-                boolean isAssigned = request.homeBranchId() != null &&
-                        userBranchRepository.existsByUserIdAndBranchId(currentUserId, request.homeBranchId());
-                if (!isAssigned) {
-                    log.warn("Branch Manager {} attempted to create user for unmanaged branch: {}", currentUserId, request.homeBranchId());
+            // Kiểm tra chi nhánh: Đối với nhân sự (RECEPTIONIST, INSTRUCTOR) phải là chi nhánh mà Manager phụ trách
+            // Đối với STUDENT: Không cần chọn cơ sở (cho phép null). Nếu có truyền thì kiểm tra quyền cơ sở nếu có
+            if (!"STUDENT".equalsIgnoreCase(targetRoleCode)) {
+                UUID managerBranchId = currentUser.getHomeBranchId();
+                if (managerBranchId == null || !managerBranchId.equals(request.homeBranchId())) {
+                    boolean isAssigned = request.homeBranchId() != null &&
+                            userBranchRepository.existsByUserIdAndBranchId(currentUserId, request.homeBranchId());
+                    if (!isAssigned) {
+                        log.warn("Branch Manager {} attempted to create user for unmanaged branch: {}", currentUserId, request.homeBranchId());
+                        throw new BusinessException(IdentityResultCodes.INVALID_BRANCH_ASSIGNMENT);
+                    }
+                }
+            } else {
+                if (request.homeBranchId() != null) {
+                    UUID managerBranchId = currentUser.getHomeBranchId();
+                    boolean isAssigned = userBranchRepository.existsByUserIdAndBranchId(currentUserId, request.homeBranchId());
+                    if (managerBranchId != null && !managerBranchId.equals(request.homeBranchId()) && !isAssigned) {
+                        log.warn("Branch Manager {} attempted to create student for unmanaged branch: {}", currentUserId, request.homeBranchId());
+                        throw new BusinessException(IdentityResultCodes.INVALID_BRANCH_ASSIGNMENT);
+                    }
+                }
+            }
+        } else if ("RECEPTIONIST".equalsIgnoreCase(callerRoleCode)) {
+            // Lễ tân chỉ được tạo STUDENT
+            if (!"STUDENT".equalsIgnoreCase(targetRoleCode)) {
+                log.warn("Receptionist {} attempted to create non-student role: {}", currentUserId, targetRoleCode);
+                throw new BusinessException(IdentityResultCodes.INVALID_ROLE_ASSIGNMENT);
+            }
+            // Thêm mới học viên không cần chọn cơ sở (homeBranchId có thể null)
+            if (request.homeBranchId() != null) {
+                UUID receptionistBranchId = currentUser.getHomeBranchId();
+                boolean isAssigned = userBranchRepository.existsByUserIdAndBranchId(currentUserId, request.homeBranchId());
+                if (receptionistBranchId != null && !receptionistBranchId.equals(request.homeBranchId()) && !isAssigned) {
+                    log.warn("Receptionist {} attempted to create student for unmanaged branch: {}", currentUserId, request.homeBranchId());
                     throw new BusinessException(IdentityResultCodes.INVALID_BRANCH_ASSIGNMENT);
                 }
             }
@@ -122,11 +214,13 @@ public class UserService {
         // 6. Lưu user mới
         UserEntity newUser = new UserEntity();
         UUID authId = supabase.createUser(email, request.password(), request.fullName().trim(), phone);
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
-            @Override public void afterCompletion(int status) {
-                if (status == STATUS_ROLLED_BACK) { try { supabase.removeCreatedUser(authId); } catch (Exception ex) { log.error("Supabase user {} needs reconciliation after profile rollback", authId); } }
-            }
-        });
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override public void afterCompletion(int status) {
+                    if (status == STATUS_ROLLED_BACK) { try { supabase.removeCreatedUser(authId); } catch (Exception ex) { log.error("Supabase user {} needs reconciliation after profile rollback", authId); } }
+                }
+            });
+        }
         newUser.setId(authId);
         newUser.setSupabaseUserId(authId);
         newUser.setPhone(phone);
@@ -224,6 +318,15 @@ public class UserService {
                     rawList = userRepository.findByHomeBranchIdOrHomeBranchIdIsNullOrderByCreatedAtDesc(managerBranchId);
                 }
             }
+        } else if ("RECEPTIONIST".equalsIgnoreCase(callerRoleCode)) {
+            // Lễ tân có thể xem danh sách học viên
+            if (isUnassignedFilter) {
+                rawList = userRepository.findByHomeBranchIdIsNullOrderByCreatedAtDesc();
+            } else if (parsedBranchId != null) {
+                rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(parsedBranchId);
+            } else {
+                rawList = userRepository.findAllByOrderByCreatedAtDesc();
+            }
         } else {
             throw new BusinessException(IdentityResultCodes.FORBIDDEN_ACTION);
         }
@@ -237,6 +340,10 @@ public class UserService {
 
         return rawList.stream()
                 .filter(u -> {
+                    if ("RECEPTIONIST".equalsIgnoreCase(callerRoleCode)) {
+                        RoleEntity r = roleMap.get(u.getRoleId());
+                        return r != null && "STUDENT".equalsIgnoreCase(r.getCode());
+                    }
                     if (roleFilter == null || roleFilter.isBlank()) return true;
                     RoleEntity r = roleMap.get(u.getRoleId());
                     return r != null && r.getCode().equalsIgnoreCase(roleFilter.trim());

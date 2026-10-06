@@ -19,4 +19,5 @@ class AccessPolicyTest {
  @Test void assignedBranchIsAllowed(){role("BRANCH_MANAGER");UUID other=UUID.randomUUID();when(assignments.existsByUserIdAndBranchId(caller.getId(),other)).thenReturn(true);assertThat(policy.requireStaffBranch(other)).isEqualTo(caller.getId());}
  @Test void disabledActorIsRejected(){caller.setIsActive(false);assertThatThrownBy(()->policy.actor()).isInstanceOf(BusinessException.class);}
  @Test void instructorCannotCheckInOtherInstructor(){role("INSTRUCTOR");assertThatThrownBy(()->policy.requireInstructorSchedule(branch,UUID.randomUUID())).isInstanceOf(BusinessException.class);}
+ @Test void receptionistCanAccessStudent(){role("RECEPTIONIST");UUID sid=UUID.randomUUID();UserEntity s=new UserEntity();s.setId(sid);s.setRoleId(UUID.randomUUID());s.setHomeBranchId(null);when(users.findById(sid)).thenReturn(Optional.of(s));RoleEntity r=new RoleEntity();r.setCode("STUDENT");when(roles.findById(s.getRoleId())).thenReturn(Optional.of(r));policy.requireStudent(sid);}
 }

@@ -1,5 +1,6 @@
 # Maven build output (all modules)
 target/
+**/target/
 *.class
 
 # Logs and JVM crash reports

@@ -1,5 +1,0 @@
-com\company\yoga\config\SecurityConfig.class
-com\company\yoga\config\AuditingActorAspect.class
-com\company\yoga\config\JwtAuthenticationFilter.class
-com\company\yoga\config\DatabaseDemoDataInitializer.class
-com\company\yoga\YogaApplication.class

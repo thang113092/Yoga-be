@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: yoga-management-backend
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: YOGA_DB_JDBC_URL
+        sync: false
+      - key: YOGA_DB_USERNAME
+        sync: false
+      - key: YOGA_DB_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: YOGA_CORS_ORIGINS
+        sync: false

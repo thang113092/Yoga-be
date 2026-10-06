@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
   shutdown: graceful
 
 spring:
@@ -42,6 +42,15 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
 
 logging:
   level:

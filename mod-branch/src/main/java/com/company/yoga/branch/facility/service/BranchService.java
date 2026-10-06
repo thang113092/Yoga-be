@@ -15,6 +15,7 @@ import com.company.yoga.common.exception.BusinessException;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class BranchService {
 
     private final BranchRepository branchRepository;
     private final RoomRepository roomRepository;
+    private final FacilityDeletionService facilityDeletionService;
 
     @Transactional(readOnly = true)
     public List<RoomResponse> getRoomsByBranch(UUID branchId) {
@@ -99,9 +101,8 @@ public class BranchService {
                 .orElseThrow(() -> new BusinessException(BranchResultCodes.ROOM_NOT_FOUND));
 
         try {
-            roomRepository.delete(entity);
-            roomRepository.flush();
-        } catch (Exception ex) {
+            facilityDeletionService.deleteRoom(roomId);
+        } catch (DataIntegrityViolationException ex) {
             entity.setIsActive(false);
             roomRepository.save(entity);
         }
@@ -180,9 +181,8 @@ public class BranchService {
                 .orElseThrow(() -> new BusinessException(BranchResultCodes.BRANCH_NOT_FOUND));
 
         try {
-            branchRepository.delete(entity);
-            branchRepository.flush();
-        } catch (Exception ex) {
+            facilityDeletionService.deleteBranch(id);
+        } catch (DataIntegrityViolationException ex) {
             entity.setIsActive(false);
             branchRepository.save(entity);
         }

@@ -36,4 +36,12 @@ public class PosController {
     public ApiResponse<PaymentDto.Resp> processPayment(@Valid @RequestBody PaymentDto.PayReq req) {
         return ApiResponse.success(paymentService.processPayment(req));
     }
+
+    @org.springframework.web.bind.annotation.GetMapping("/orders/student/{studentId}")
+    @Operation(summary = "Lấy lịch sử mua thẻ của học viên")
+    public ApiResponse<java.util.List<PosOrderDto.StudentOrderHistoryResp>> getStudentOrders(
+            @org.springframework.web.bind.annotation.PathVariable java.util.UUID studentId
+    ) {
+        return ApiResponse.success(posOrderService.getStudentOrders(studentId));
+    }
 }

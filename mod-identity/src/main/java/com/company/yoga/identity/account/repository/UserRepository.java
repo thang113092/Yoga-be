@@ -15,6 +15,13 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     boolean existsByEmail(String email);
     @org.springframework.data.jpa.repository.Query("SELECT u FROM UserEntity u WHERE u.homeBranchId = :branchId AND u.passwordHash <> '!DELETED' ORDER BY u.createdAt DESC")
     java.util.List<UserEntity> findByHomeBranchIdOrderByCreatedAtDesc(@org.springframework.data.repository.query.Param("branchId") UUID branchId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM UserEntity u WHERE (u.homeBranchId = :branchId OR u.homeBranchId IS NULL) AND u.passwordHash <> '!DELETED' ORDER BY u.createdAt DESC")
+    java.util.List<UserEntity> findByHomeBranchIdOrHomeBranchIdIsNullOrderByCreatedAtDesc(@org.springframework.data.repository.query.Param("branchId") UUID branchId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM UserEntity u WHERE u.homeBranchId IS NULL AND u.passwordHash <> '!DELETED' ORDER BY u.createdAt DESC")
+    java.util.List<UserEntity> findByHomeBranchIdIsNullOrderByCreatedAtDesc();
+
     @org.springframework.data.jpa.repository.Query("SELECT u FROM UserEntity u WHERE u.passwordHash <> '!DELETED' ORDER BY u.createdAt DESC")
     java.util.List<UserEntity> findAllByOrderByCreatedAtDesc();
 }

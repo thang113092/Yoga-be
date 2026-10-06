@@ -30,6 +30,8 @@ public class PosOrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final MembershipRepository membershipRepository;
+    private final com.company.yoga.membership.order.repository.PaymentRepository paymentRepository;
+    private final com.company.yoga.branch.facility.repository.BranchRepository branchRepository;
 
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
@@ -129,5 +131,80 @@ public class PosOrderService {
                 membership.getId(),
                 membership.getMembershipCode()
         );
+    }
+
+    @Transactional(readOnly = true)
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    public java.util.List<PosOrderDto.StudentOrderHistoryResp> getStudentOrders(UUID studentId) {
+        accessPolicy.requireStudent(studentId);
+        java.util.List<OrderEntity> orders = orderRepository.findByCustomerIdOrderByOrderDateDesc(studentId);
+        if (orders.isEmpty()) {
+            return java.util.List.of();
+        }
+
+        java.util.Map<UUID, String> branchNames = branchRepository.findAll().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.company.yoga.branch.facility.entity.BranchEntity::getId,
+                        com.company.yoga.branch.facility.entity.BranchEntity::getName
+                ));
+
+        return orders.stream().map(order -> {
+            java.util.List<OrderItemEntity> items = orderItemRepository.findByOrderId(order.getId());
+            java.util.List<com.company.yoga.membership.order.entity.PaymentEntity> payments = paymentRepository.findByOrderId(order.getId());
+
+            java.util.List<PosOrderDto.OrderItemResp> itemDtos = items.stream()
+                    .map(item -> {
+                        var mbOpt = membershipRepository.findBySourceOrderItemId(item.getId());
+                        String mbCode = mbOpt.map(MembershipEntity::getMembershipCode).orElse(null);
+                        String mbStatus = mbOpt.map(MembershipEntity::getStatus).orElse(null);
+                        Integer remaining = mbOpt.map(MembershipEntity::getRemainingSessions).orElse(null);
+                        Integer total = mbOpt.map(MembershipEntity::getTotalSessions).orElse(null);
+                        java.time.LocalDate sDate = mbOpt.map(MembershipEntity::getStartDate).orElse(null);
+                        java.time.LocalDate eDate = mbOpt.map(MembershipEntity::getEndDate).orElse(null);
+                        return new PosOrderDto.OrderItemResp(
+                                item.getItemId(),
+                                item.getItemType(),
+                                item.getItemNameSnapshot(),
+                                item.getUnitPriceSnapshot(),
+                                item.getQuantity(),
+                                item.getLineTotal(),
+                                mbCode,
+                                mbStatus,
+                                remaining,
+                                total,
+                                sDate,
+                                eDate
+                        );
+                    })
+                    .toList();
+
+            java.util.List<PosOrderDto.PaymentResp> paymentDtos = payments.stream()
+                    .map(p -> new PosOrderDto.PaymentResp(
+                            p.getId(),
+                            p.getPaymentCode(),
+                            p.getAmount(),
+                            p.getPaymentMethod(),
+                            p.getPaymentStatus(),
+                            p.getPaymentTime()
+                    ))
+                    .toList();
+
+            String branchName = order.getBranchId() != null ? branchNames.get(order.getBranchId()) : null;
+
+            return new PosOrderDto.StudentOrderHistoryResp(
+                    order.getId(),
+                    order.getOrderCode(),
+                    order.getBranchId(),
+                    branchName,
+                    order.getOrderDate(),
+                    order.getSubtotal(),
+                    order.getDiscountAmount(),
+                    order.getTotalAmount(),
+                    order.getStatus(),
+                    order.getNotes(),
+                    itemDtos,
+                    paymentDtos
+            );
+        }).toList();
     }
 }

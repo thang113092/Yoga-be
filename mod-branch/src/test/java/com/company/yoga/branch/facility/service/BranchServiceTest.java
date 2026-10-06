@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.company.yoga.branch.BranchResultCodes;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class BranchServiceTest {
@@ -35,6 +38,9 @@ class BranchServiceTest {
 
     @Mock
     private RoomRepository roomRepository;
+
+    @Mock
+    private FacilityDeletionService facilityDeletionService;
 
     @InjectMocks
     private BranchService branchService;
@@ -125,7 +131,31 @@ class BranchServiceTest {
 
         branchService.deleteBranch(branchId);
 
-        verify(branchRepository).delete(sampleBranch);
+        verify(facilityDeletionService).deleteBranch(branchId);
+        verify(branchRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteBranch_WithRelatedData_Deactivates() {
+        when(branchRepository.findById(branchId)).thenReturn(Optional.of(sampleBranch));
+        doThrow(new DataIntegrityViolationException("foreign key"))
+                .when(facilityDeletionService).deleteBranch(branchId);
+
+        branchService.deleteBranch(branchId);
+
+        assertThat(sampleBranch.getIsActive()).isFalse();
+        verify(branchRepository).save(sampleBranch);
+    }
+
+    @Test
+    void deleteBranch_UnexpectedFailure_IsNotHidden() {
+        when(branchRepository.findById(branchId)).thenReturn(Optional.of(sampleBranch));
+        doThrow(new IllegalStateException("connection failure"))
+                .when(facilityDeletionService).deleteBranch(branchId);
+
+        assertThatThrownBy(() -> branchService.deleteBranch(branchId))
+                .isInstanceOf(IllegalStateException.class);
+        verify(branchRepository, never()).save(any());
     }
 
     @Test
@@ -201,6 +231,18 @@ class BranchServiceTest {
 
         branchService.deleteRoom(roomId);
 
-        verify(roomRepository).delete(sampleRoom);
+        verify(facilityDeletionService).deleteRoom(roomId);
+    }
+
+    @Test
+    void deleteRoom_WithRelatedData_Deactivates() {
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(sampleRoom));
+        doThrow(new DataIntegrityViolationException("foreign key"))
+                .when(facilityDeletionService).deleteRoom(roomId);
+
+        branchService.deleteRoom(roomId);
+
+        assertThat(sampleRoom.getIsActive()).isFalse();
+        verify(roomRepository).save(sampleRoom);
     }
 }

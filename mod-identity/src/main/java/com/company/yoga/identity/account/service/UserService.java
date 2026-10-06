@@ -170,6 +170,11 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserDto.UserResponse> getUsers(UUID branchFilter, String roleFilter) {
+        return getUsers(branchFilter != null ? branchFilter.toString() : null, roleFilter);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto.UserResponse> getUsers(String branchFilter, String roleFilter) {
         UUID currentUserId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> new BusinessException(IdentityResultCodes.FORBIDDEN_ACTION));
 
@@ -182,18 +187,43 @@ public class UserService {
         String callerRoleCode = callerRole.getCode();
 
         List<UserEntity> rawList;
+        boolean isUnassignedFilter = "UNASSIGNED".equalsIgnoreCase(branchFilter != null ? branchFilter.trim() : "");
+        UUID parsedBranchId = null;
+        if (branchFilter != null && !branchFilter.isBlank() && !isUnassignedFilter) {
+            try {
+                parsedBranchId = UUID.fromString(branchFilter.trim());
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid branchId format: {}", branchFilter);
+            }
+        }
+
         if ("SUPER_ADMIN".equalsIgnoreCase(callerRoleCode)) {
-            if (branchFilter != null) {
-                rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(branchFilter);
+            if (isUnassignedFilter) {
+                rawList = userRepository.findByHomeBranchIdIsNullOrderByCreatedAtDesc();
+            } else if (parsedBranchId != null) {
+                rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(parsedBranchId);
             } else {
                 rawList = userRepository.findAllByOrderByCreatedAtDesc();
             }
         } else if ("BRANCH_MANAGER".equalsIgnoreCase(callerRoleCode)) {
             UUID managerBranchId = currentUser.getHomeBranchId();
-            if (managerBranchId == null) {
-                return List.of();
+            if (isUnassignedFilter) {
+                rawList = userRepository.findByHomeBranchIdIsNullOrderByCreatedAtDesc();
+            } else if (parsedBranchId != null) {
+                boolean isOwnBranch = managerBranchId != null && managerBranchId.equals(parsedBranchId);
+                boolean isAssigned = userBranchRepository.existsByUserIdAndBranchId(currentUserId, parsedBranchId);
+                if (!isOwnBranch && !isAssigned) {
+                    throw new BusinessException(IdentityResultCodes.FORBIDDEN_ACTION);
+                }
+                rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(parsedBranchId);
+            } else {
+                // Mặc định: Thấy người thuộc chi nhánh của mình VÀ những người không thuộc chi nhánh nào
+                if (managerBranchId == null) {
+                    rawList = userRepository.findByHomeBranchIdIsNullOrderByCreatedAtDesc();
+                } else {
+                    rawList = userRepository.findByHomeBranchIdOrHomeBranchIdIsNullOrderByCreatedAtDesc(managerBranchId);
+                }
             }
-            rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(managerBranchId);
         } else {
             throw new BusinessException(IdentityResultCodes.FORBIDDEN_ACTION);
         }
@@ -273,8 +303,9 @@ public class UserService {
             boolean isSameBranch = managerBranchId != null && managerBranchId.equals(targetUser.getHomeBranchId());
             boolean isAssigned = targetUser.getHomeBranchId() != null &&
                     userBranchRepository.existsByUserIdAndBranchId(currentUserId, targetUser.getHomeBranchId());
+            boolean isUnassigned = targetUser.getHomeBranchId() == null;
 
-            if (!isSameBranch && !isAssigned) {
+            if (!isSameBranch && !isAssigned && !isUnassigned) {
                 log.warn("Branch Manager {} attempted to change status of user outside branch", currentUserId);
                 throw new BusinessException(IdentityResultCodes.INVALID_BRANCH_ASSIGNMENT);
             }

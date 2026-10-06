@@ -4,6 +4,7 @@ com\company\yoga\branch\package-info.class
 com\company\yoga\branch\facility\controller\BranchController.class
 com\company\yoga\branch\facility\repository\BranchRepository.class
 com\company\yoga\branch\facility\dto\RoomDto$CreateRoomRequest.class
+com\company\yoga\branch\facility\service\FacilityDeletionService.class
 com\company\yoga\branch\BranchResultCodes.class
 com\company\yoga\branch\facility\repository\RoomRepository.class
 com\company\yoga\branch\facility\dto\RoomDto$RoomResponse.class

@@ -40,4 +40,43 @@ public final class PosOrderDto {
             UUID membershipId,
             String membershipCode
     ) {}
+
+    public record StudentOrderHistoryResp(
+            UUID orderId,
+            String orderCode,
+            UUID branchId,
+            String branchName,
+            Instant orderDate,
+            BigDecimal subtotal,
+            BigDecimal discountAmount,
+            BigDecimal totalAmount,
+            String status,
+            String notes,
+            java.util.List<OrderItemResp> items,
+            java.util.List<PaymentResp> payments
+    ) {}
+
+    public record OrderItemResp(
+            UUID itemId,
+            String itemType,
+            String itemName,
+            BigDecimal unitPrice,
+            Integer quantity,
+            BigDecimal lineTotal,
+            String membershipCode,
+            String membershipStatus,
+            Integer remainingSessions,
+            Integer totalSessions,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate
+    ) {}
+
+    public record PaymentResp(
+            UUID paymentId,
+            String paymentCode,
+            BigDecimal amount,
+            String paymentMethod,
+            String paymentStatus,
+            Instant paymentTime
+    ) {}
 }

@@ -43,7 +43,7 @@ public class UserController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER')")
     @Operation(summary = "Lấy danh sách người dùng theo phân quyền")
     public ApiResponse<List<UserDto.UserResponse>> getUsers(
-            @RequestParam(required = false) UUID branchId,
+            @RequestParam(required = false) String branchId,
             @RequestParam(required = false) String roleCode
     ) {
         List<UserDto.UserResponse> list = userService.getUsers(branchId, roleCode);

@@ -33,6 +33,8 @@ class PosOrderServiceTest {
     private OrderRepository orderRepository;
     private OrderItemRepository orderItemRepository;
     private MembershipRepository membershipRepository;
+    private com.company.yoga.membership.order.repository.PaymentRepository paymentRepository;
+    private com.company.yoga.branch.facility.repository.BranchRepository branchRepository;
     private PosOrderService service;
 
     @BeforeEach
@@ -41,6 +43,8 @@ class PosOrderServiceTest {
         orderRepository = mock(OrderRepository.class);
         orderItemRepository = mock(OrderItemRepository.class);
         membershipRepository = mock(MembershipRepository.class);
+        paymentRepository = mock(com.company.yoga.membership.order.repository.PaymentRepository.class);
+        branchRepository = mock(com.company.yoga.branch.facility.repository.BranchRepository.class);
         var policy = mock(com.company.yoga.identity.account.service.AccessPolicy.class);
         var em = mock(jakarta.persistence.EntityManager.class);
         var query = mock(jakarta.persistence.Query.class);
@@ -48,7 +52,7 @@ class PosOrderServiceTest {
         when(query.setParameter(any(String.class), any())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
         when(policy.requireStaffBranch(any())).thenReturn(new UUID(0,1));
-        service = new PosOrderService(policy, em, planRepository, orderRepository, orderItemRepository, membershipRepository);
+        service = new PosOrderService(policy, em, planRepository, orderRepository, orderItemRepository, membershipRepository, paymentRepository, branchRepository);
     }
 
     @Test
@@ -112,5 +116,31 @@ class PosOrderServiceTest {
         assertThatThrownBy(() -> service.createMembershipOrder(req))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", MembershipResultCodes.PLAN_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("Lấy danh sách lịch sử đơn hàng của học viên thành công")
+    void getStudentOrders_success() {
+        UUID studentId = UUID.randomUUID();
+        UUID branchId = UUID.randomUUID();
+        OrderEntity order = new OrderEntity();
+        order.setId(UUID.randomUUID());
+        order.setOrderCode("ORD-12345");
+        order.setCustomerId(studentId);
+        order.setBranchId(branchId);
+        order.setSubtotal(new BigDecimal("1000000"));
+        order.setTotalAmount(new BigDecimal("1000000"));
+        order.setStatus("PAID");
+
+        when(orderRepository.findByCustomerIdOrderByOrderDateDesc(studentId)).thenReturn(List.of(order));
+        when(orderItemRepository.findByOrderId(order.getId())).thenReturn(List.of());
+        when(paymentRepository.findByOrderId(order.getId())).thenReturn(List.of());
+        when(branchRepository.findAll()).thenReturn(List.of());
+
+        List<PosOrderDto.StudentOrderHistoryResp> res = service.getStudentOrders(studentId);
+
+        assertThat(res).hasSize(1);
+        assertThat(res.get(0).orderCode()).isEqualTo("ORD-12345");
+        assertThat(res.get(0).status()).isEqualTo("PAID");
     }
 }

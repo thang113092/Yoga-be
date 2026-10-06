@@ -7,4 +7,5 @@ D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\facility\entity\R
 D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\facility\repository\BranchRepository.java
 D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\facility\repository\RoomRepository.java
 D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\facility\service\BranchService.java
+D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\facility\service\FacilityDeletionService.java
 D:\DA\backend\mod-branch\src\main\java\com\company\yoga\branch\package-info.java

@@ -1,0 +1,25 @@
+# Maven build output (all modules)
+target/
+*.class
+
+# Logs and JVM crash reports
+*.log
+hs_err_pid*
+replay_pid*
+
+# Private local configuration
+.env
+.env.*
+!.env.example
+application-local.properties
+application-local.yml
+application-local.yaml
+
+# IDE and OS files
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.DS_Store
+Thumbs.db

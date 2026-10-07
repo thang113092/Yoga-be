@@ -319,10 +319,17 @@ public class UserService {
                 }
             }
         } else if ("RECEPTIONIST".equalsIgnoreCase(callerRoleCode)) {
-            // Lễ tân có thể xem danh sách học viên
+            // Lễ tân có thể xem danh sách học viên hoặc huấn luyện viên
             if (isUnassignedFilter) {
                 rawList = userRepository.findByHomeBranchIdIsNullOrderByCreatedAtDesc();
             } else if (parsedBranchId != null) {
+                rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(parsedBranchId);
+            } else {
+                rawList = userRepository.findAllByOrderByCreatedAtDesc();
+            }
+        } else if ("INSTRUCTOR".equalsIgnoreCase(callerRoleCode)) {
+            // Huấn luyện viên có thể xem danh sách HLV để lọc lịch ca dạy
+            if (parsedBranchId != null) {
                 rawList = userRepository.findByHomeBranchIdOrderByCreatedAtDesc(parsedBranchId);
             } else {
                 rawList = userRepository.findAllByOrderByCreatedAtDesc();
@@ -340,9 +347,17 @@ public class UserService {
 
         return rawList.stream()
                 .filter(u -> {
+                    if ("INSTRUCTOR".equalsIgnoreCase(callerRoleCode)) {
+                        RoleEntity r = roleMap.get(u.getRoleId());
+                        return r != null && "INSTRUCTOR".equalsIgnoreCase(r.getCode()) && Boolean.TRUE.equals(u.getIsActive());
+                    }
                     if ("RECEPTIONIST".equalsIgnoreCase(callerRoleCode)) {
                         RoleEntity r = roleMap.get(u.getRoleId());
-                        return r != null && "STUDENT".equalsIgnoreCase(r.getCode());
+                        if (r == null) return false;
+                        if ("INSTRUCTOR".equalsIgnoreCase(roleFilter)) {
+                            return "INSTRUCTOR".equalsIgnoreCase(r.getCode()) && Boolean.TRUE.equals(u.getIsActive());
+                        }
+                        return "STUDENT".equalsIgnoreCase(r.getCode());
                     }
                     if (roleFilter == null || roleFilter.isBlank()) return true;
                     RoleEntity r = roleMap.get(u.getRoleId());

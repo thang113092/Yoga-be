@@ -55,4 +55,11 @@ public class BookingController {
         List<BookingDto.StudentBookingDetailResp> list = bookingService.getStudentBookingDetails(studentId);
         return ApiResponse.success(list);
     }
+
+    @Operation(summary = "Lấy lịch sử rèn luyện và điểm danh của học viên")
+    @GetMapping("/student/{studentId}/history")
+    public ApiResponse<List<BookingDto.WorkoutHistoryResp>> getStudentWorkoutHistory(@PathVariable UUID studentId) {
+        List<BookingDto.WorkoutHistoryResp> list = bookingService.getStudentWorkoutHistory(studentId);
+        return ApiResponse.success(list);
+    }
 }

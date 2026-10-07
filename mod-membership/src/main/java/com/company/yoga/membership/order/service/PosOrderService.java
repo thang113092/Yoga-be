@@ -55,6 +55,13 @@ public class PosOrderService {
                     || !java.util.Objects.equals(order.getNotes(), req.notes()))
                 throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Order key belongs to another checkout");
             var membership = membershipRepository.findBySourceOrderItemId(item.getId()).orElseThrow();
+            if (!java.util.Objects.equals(membership.getReplacesMembershipId(), req.replacesMembershipId())
+                    || req.expectedCredit() == null || membership.getExchangeBaseCredit().compareTo(req.expectedCredit()) != 0
+                    || (req.expectedTotal() != null && order.getTotalAmount().compareTo(req.expectedTotal()) != 0))
+                throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Order key belongs to another exchange");
+            if (req.adjustedCredit() != null && membership.getExchangeCredit().compareTo(req.adjustedCredit()) != 0
+                    || !java.util.Objects.equals(membership.getExchangeAdjustmentReason(), req.adjustmentReason()))
+                throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Order key belongs to another adjustment");
             return new PosOrderDto.OrderResp(order.getId(), order.getOrderCode(), order.getBranchId(), order.getCustomerId(), item.getItemId(), item.getItemNameSnapshot(), order.getSubtotal(), order.getDiscountAmount(), order.getTotalAmount(), order.getStatus(), order.getOrderDate(), membership.getId(), membership.getMembershipCode());
         }
         MembershipPlanEntity plan = planRepository.findById(req.planId())
@@ -63,6 +70,30 @@ public class PosOrderService {
         if (!Boolean.TRUE.equals(plan.getIsActive())) {
             throw new BusinessException(MembershipResultCodes.PLAN_NOT_FOUND);
         }
+
+        var quote = getCheckoutQuote(req.studentId(), req.planId(), req.branchId());
+        UUID currentId = quote.currentMembership() == null ? null : quote.currentMembership().id();
+        if (quote.issue() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, quote.issue());
+        BigDecimal credit = quote.credit();
+        UUID adjustedBy = null;
+        if (req.adjustedCredit() != null) {
+            String role = accessPolicy.role(accessPolicy.actor());
+            if (!java.util.Set.of("SUPER_ADMIN", "BRANCH_MANAGER").contains(role))
+                throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.FORBIDDEN);
+            if (currentId == null || req.adjustmentReason() == null || req.adjustmentReason().isBlank()
+                    || req.adjustedCredit().stripTrailingZeros().scale() > 0 || req.adjustedCredit().signum() < 0 || req.adjustedCredit().compareTo(plan.getPrice()) > 0
+                    || req.adjustedCredit().compareTo(quote.contractValue()) > 0)
+                throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST, "Nhập lý do và giá trị điều chỉnh hợp lệ, không vượt giá trị đã mua hoặc giá gói mới.");
+            credit = req.adjustedCredit().setScale(0, java.math.RoundingMode.DOWN);
+            adjustedBy = cashierId;
+        } else if (req.adjustmentReason() != null) {
+            throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST, "Lý do điều chỉnh cần đi kèm giá trị điều chỉnh.");
+        }
+        BigDecimal totalAmount = plan.getPrice().subtract(credit);
+        if (!java.util.Objects.equals(currentId, req.replacesMembershipId()) || req.expectedCredit() == null
+                || req.expectedCredit().compareTo(quote.credit()) != 0
+                || (req.expectedTotal() != null && req.expectedTotal().compareTo(totalAmount) != 0))
+            throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Thông tin thẻ hoặc số tiền đã thay đổi. Vui lòng tải lại báo giá.");
 
         // 1. Tạo đơn hàng (Order)
         String orderCode = "ORD-" + key;
@@ -73,9 +104,9 @@ public class PosOrderService {
         order.setCashierId(cashierId);
         order.setOrderDate(Instant.now());
         order.setSubtotal(plan.getPrice());
-        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setDiscountAmount(credit);
         order.setTaxAmount(BigDecimal.ZERO);
-        order.setTotalAmount(plan.getPrice());
+        order.setTotalAmount(totalAmount);
         order.setStatus("PENDING");
         order.setNotes(req.notes());
         orderRepository.save(order);
@@ -113,6 +144,11 @@ public class PosOrderService {
         membership.setStatus("PENDING_PAYMENT");
         membership.setSourceOrderItemId(item.getId());
         membership.setPurchasedPrice(plan.getPrice());
+        membership.setReplacesMembershipId(currentId);
+        membership.setExchangeCredit(credit);
+        membership.setExchangeBaseCredit(quote.credit());
+        membership.setExchangeAdjustedBy(adjustedBy);
+        membership.setExchangeAdjustmentReason(req.adjustmentReason());
         membership.setNotes(req.notes());
         membershipRepository.save(membership);
 
@@ -135,6 +171,39 @@ public class PosOrderService {
 
     @Transactional(readOnly = true)
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    public PosOrderDto.CheckoutQuote getCheckoutQuote(UUID studentId, UUID planId, UUID branchId) {
+        accessPolicy.requireStaffBranch(branchId);
+        accessPolicy.requireBooking(studentId, branchId);
+        var plan = planRepository.findById(planId).orElseThrow(() -> new BusinessException(MembershipResultCodes.PLAN_NOT_FOUND));
+        Object[] row;
+        try {
+            row = (Object[]) entityManager.createNativeQuery("SELECT current_id, credit, issue, contract_value FROM yoga.membership_exchange_quote(:student,:plan,:branch,NULL)")
+                    .setParameter("student", studentId).setParameter("plan", planId).setParameter("branch", branchId).getSingleResult();
+        } catch (RuntimeException error) {
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                if (cause instanceof java.sql.SQLException sql && sql.getSQLState() != null && java.util.Set.of("42883", "42703", "42P01").contains(sql.getSQLState()))
+                    throw new BusinessException(MembershipResultCodes.CHECKOUT_NOT_READY);
+            }
+            throw error;
+        }
+        UUID currentId = row[0] == null ? null : UUID.fromString(row[0].toString());
+        var current = currentId == null ? null : membershipRepository.findById(currentId)
+                .map(com.company.yoga.membership.plan.dto.MembershipDto.Resp::from).orElseThrow();
+        BigDecimal credit = (BigDecimal) row[1];
+        String currentPlanName = current == null ? null : planRepository.findById(current.planId()).map(MembershipPlanEntity::getName).orElse("Gói ngừng bán");
+        return new PosOrderDto.CheckoutQuote(current, currentPlanName, (BigDecimal) row[3], credit, plan.getPrice().subtract(credit), (String) row[2]);
+    }
+
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    public void cancelPendingOrder(UUID orderId) {
+        var order = orderRepository.findByIdWithLock(orderId).orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
+        accessPolicy.requireStaffBranch(order.getBranchId());
+        entityManager.createNativeQuery("SELECT 1 FROM yoga.cancel_pending_membership_order(:id)").setParameter("id", orderId).getSingleResult();
+    }
+
+    @Transactional(readOnly = true)
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST', 'STUDENT')")
     public java.util.List<PosOrderDto.StudentOrderHistoryResp> getStudentOrders(UUID studentId) {
         accessPolicy.requireStudent(studentId);
         java.util.List<OrderEntity> orders = orderRepository.findByCustomerIdOrderByOrderDateDesc(studentId);

@@ -76,6 +76,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
         log.warn("Database rejected invalid or conflicting data: {}", ex.getMessage());
+        String fullMsg = buildFullMessage(ex);
+        if (fullMsg.contains("uk_room_schedule_no_overlap")) {
+            return ResponseEntity.status(409).body(ApiResponse.failure("SCHED_409_ROOM_OVERLAP", "Phòng tập đã có ca học khác trong khung giờ đã chọn"));
+        }
+        if (fullMsg.contains("no_instructor_overlap")) {
+            return ResponseEntity.status(409).body(ApiResponse.failure("SCHED_409_INSTRUCTOR_OVERLAP", "Huấn luyện viên đã có lịch dạy lớp khác trong khung giờ đã chọn"));
+        }
         String msg = extractDbErrorMessage(ex);
         return ResponseEntity.status(409).body(ApiResponse.failure("CONFLICT", msg != null ? msg : "Dữ liệu xung đột hoặc không thỏa mãn ràng buộc hệ thống"));
     }
@@ -104,6 +111,18 @@ public class GlobalExceptionHandler {
             cur = cur.getCause();
         }
         return null;
+    }
+
+    private String buildFullMessage(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        while (cur != null) {
+            if (cur.getMessage() != null) {
+                sb.append(' ').append(cur.getMessage());
+            }
+            cur = cur.getCause();
+        }
+        return sb.toString();
     }
 
     @ExceptionHandler(Exception.class)

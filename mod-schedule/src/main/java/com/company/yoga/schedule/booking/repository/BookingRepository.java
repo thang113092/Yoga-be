@@ -22,6 +22,44 @@ public interface BookingRepository extends JpaRepository<BookingEntity, UUID> {
     List<BookingEntity> findByStudentIdOrderByCreatedAtDesc(UUID studentId);
     Optional<BookingEntity> findByBookingCode(String bookingCode);
 
-    @org.springframework.data.jpa.repository.Query("SELECT new com.company.yoga.schedule.booking.dto.BookingDto$AttendeeResp(b.id, b.bookingCode, u.id, u.fullName, u.phone, b.matNumber, b.status, b.bookingTime) FROM BookingEntity b JOIN com.company.yoga.identity.account.entity.UserEntity u ON u.id = b.studentId WHERE b.scheduleId = :scheduleId AND b.status <> 'CANCELLED' ORDER BY b.createdAt ASC")
+    @org.springframework.data.jpa.repository.Query("SELECT new com.company.yoga.schedule.booking.dto.BookingDto$AttendeeResp(" +
+            "b.id, b.bookingCode, u.id, u.fullName, u.phone, u.email, u.gender, b.matNumber, b.status, b.bookingTime, att.checkedInAt) " +
+            "FROM BookingEntity b " +
+            "JOIN com.company.yoga.identity.account.entity.UserEntity u ON u.id = b.studentId " +
+            "LEFT JOIN AttendanceRecordEntity att ON att.bookingId = b.id " +
+            "WHERE b.scheduleId = :scheduleId AND b.status <> 'CANCELLED' " +
+            "ORDER BY b.createdAt ASC")
     List<com.company.yoga.schedule.booking.dto.BookingDto.AttendeeResp> findScheduleAttendees(@org.springframework.data.repository.query.Param("scheduleId") UUID scheduleId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT new com.company.yoga.schedule.booking.dto.BookingDto$WorkoutHistoryResp(" +
+            "b.id, b.bookingCode, b.scheduleId, ct.name, ct.intensityLevel, u.fullName, r.name, br.name, br.id, " +
+            "s.startTime, s.endTime, ct.defaultDurationMinutes, b.matNumber, b.status, " +
+            "COALESCE(att.checkedInAt, b.bookingTime), " +
+            "COALESCE(att.checkInMethod, 'QR_SCAN'), " +
+            "COALESCE(att.attendanceStatus, 'PRESENT'), " +
+            "m.membershipCode, att.notes) " +
+            "FROM BookingEntity b " +
+            "JOIN ClassScheduleEntity s ON s.id = b.scheduleId " +
+            "JOIN ClassTypeEntity ct ON ct.id = s.classTypeId " +
+            "JOIN com.company.yoga.identity.account.entity.UserEntity u ON u.id = s.instructorId " +
+            "JOIN RoomEntity r ON r.id = s.roomId " +
+            "JOIN com.company.yoga.branch.facility.entity.BranchEntity br ON br.id = s.branchId " +
+            "LEFT JOIN com.company.yoga.membership.plan.entity.MembershipEntity m ON m.id = b.membershipId " +
+            "LEFT JOIN AttendanceRecordEntity att ON att.bookingId = b.id " +
+            "WHERE b.studentId = :studentId AND (b.status = 'ATTENDED' OR att.id IS NOT NULL) " +
+            "ORDER BY s.startTime DESC")
+    List<com.company.yoga.schedule.booking.dto.BookingDto.WorkoutHistoryResp> findStudentWorkoutHistory(
+            @org.springframework.data.repository.query.Param("studentId") UUID studentId
+    );
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(b) > 0 FROM BookingEntity b JOIN ClassScheduleEntity s ON s.id = b.scheduleId " +
+            "WHERE b.studentId = :studentId AND b.status = 'CONFIRMED' AND s.status <> 'CANCELLED' " +
+            "AND (:excludeScheduleId IS NULL OR s.id <> :excludeScheduleId) " +
+            "AND s.startTime < :endTime AND s.endTime > :startTime")
+    boolean existsStudentTimeConflict(
+            @org.springframework.data.repository.query.Param("studentId") UUID studentId,
+            @org.springframework.data.repository.query.Param("excludeScheduleId") UUID excludeScheduleId,
+            @org.springframework.data.repository.query.Param("startTime") java.time.Instant startTime,
+            @org.springframework.data.repository.query.Param("endTime") java.time.Instant endTime
+    );
 }

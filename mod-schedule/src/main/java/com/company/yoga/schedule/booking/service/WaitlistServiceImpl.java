@@ -76,6 +76,10 @@ public class WaitlistServiceImpl implements WaitlistService {
             throw new BusinessException(ScheduleResultCodes.BOOKING_ALREADY_EXISTS);
         }
 
+        if (bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime())) {
+            throw new BusinessException(ScheduleResultCodes.STUDENT_SCHEDULE_CONFLICT);
+        }
+
         if (waitlistRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "WAITING").isPresent()) {
             throw new BusinessException(ScheduleResultCodes.WAITLIST_ALREADY_JOINED);
         }
@@ -88,9 +92,15 @@ public class WaitlistServiceImpl implements WaitlistService {
             throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_NOT_ACTIVE);
         }
 
-        if (!Boolean.TRUE.equals(membership.getIsAllBranches())
-                && !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
-            throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_BRANCH_MISMATCH);
+        // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép vào hàng chờ tại đúng chi nhánh đã đăng ký
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches());
+        if (!isAllBranches) {
+            if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
+                    || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
+                log.warn("Chặn hàng chờ: Học viên {} dùng thẻ đơn cơ sở {} (thuộc cơ sở {}) để vào hàng chờ ca học {} (thuộc cơ sở {})",
+                        studentId, membership.getId(), membership.getRegisteredBranchId(), schedule.getId(), schedule.getBranchId());
+                throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_BRANCH_MISMATCH);
+            }
         }
 
         if (membership.getRemainingSessions() != null && membership.getRemainingSessions() <= 0) {
@@ -196,6 +206,7 @@ public class WaitlistServiceImpl implements WaitlistService {
                     && Objects.equals(mb.getStudentId(), candidate.getStudentId())
                     && userRepository.findById(candidate.getStudentId()).map(u -> Boolean.TRUE.equals(u.getIsActive())).orElse(false)
                     && bookingRepository.activeBookingCount(scheduleId, candidate.getStudentId()) == 0
+                    && !bookingRepository.existsStudentTimeConflict(candidate.getStudentId(), scheduleId, schedule.getStartTime(), schedule.getEndTime())
                     && bookingRepository.freezeCount(mb.getId(), scheduleDate) == 0;
 
             if (!isValid) {

@@ -351,4 +351,32 @@ class UserServiceTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).fullName()).isEqualTo("Nguyen Search");
     }
+
+    @Test
+    void instructor_canGetInstructorsList() {
+        UUID instructorRoleId = UUID.randomUUID();
+        RoleEntity instructorRole = new RoleEntity();
+        instructorRole.setId(instructorRoleId);
+        instructorRole.setCode("INSTRUCTOR");
+
+        callerManager.setRoleId(instructorRoleId);
+        when(roleRepository.findById(instructorRoleId)).thenReturn(Optional.of(instructorRole));
+        when(roleRepository.findAll()).thenReturn(List.of(instructorRole));
+        when(branchRepository.findAll()).thenReturn(List.of());
+
+        UserEntity otherInstructor = new UserEntity();
+        otherInstructor.setId(UUID.randomUUID());
+        otherInstructor.setPhone("0911223344");
+        otherInstructor.setEmail("instructor2@an-yen.vn");
+        otherInstructor.setFullName("Nguyen Van HLV");
+        otherInstructor.setRoleId(instructorRoleId);
+        otherInstructor.setIsActive(true);
+
+        when(userRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(callerManager, otherInstructor));
+
+        List<UserDto.UserResponse> results = userService.getUsers((String) null, "INSTRUCTOR");
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(1).fullName()).isEqualTo("Nguyen Van HLV");
+    }
 }

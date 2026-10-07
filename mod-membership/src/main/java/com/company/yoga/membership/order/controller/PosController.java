@@ -38,6 +38,20 @@ public class PosController {
         return ApiResponse.success(orderListService.list(branchId, status, search, page, size));
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/quote")
+    public ApiResponse<PosOrderDto.CheckoutQuote> quote(
+            @org.springframework.web.bind.annotation.RequestParam java.util.UUID studentId,
+            @org.springframework.web.bind.annotation.RequestParam java.util.UUID planId,
+            @org.springframework.web.bind.annotation.RequestParam java.util.UUID branchId) {
+        return ApiResponse.success(posOrderService.getCheckoutQuote(studentId, planId, branchId));
+    }
+
+    @PostMapping("/orders/{orderId}/cancel")
+    public ApiResponse<Void> cancel(@org.springframework.web.bind.annotation.PathVariable java.util.UUID orderId) {
+        posOrderService.cancelPendingOrder(orderId);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/orders")
     @Operation(summary = "Tạo đơn hàng mua thẻ tập tại quầy")
     public ApiResponse<PosOrderDto.OrderResp> createOrder(@Valid @RequestBody PosOrderDto.CreateOrderReq req, @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") java.util.UUID key) {
@@ -51,6 +65,7 @@ public class PosController {
     }
 
     @org.springframework.web.bind.annotation.GetMapping("/orders/student/{studentId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST', 'STUDENT')")
     @Operation(summary = "Lấy lịch sử mua thẻ của học viên")
     public ApiResponse<java.util.List<PosOrderDto.StudentOrderHistoryResp>> getStudentOrders(
             @org.springframework.web.bind.annotation.PathVariable java.util.UUID studentId

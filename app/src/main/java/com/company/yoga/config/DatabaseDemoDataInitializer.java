@@ -490,7 +490,7 @@ public class DatabaseDemoDataInitializer implements CommandLineRunner {
                 PosOrderDto.CreateOrderReq orderReq = new PosOrderDto.CreateOrderReq(
                         BRANCH_Q1,
                         USER_STUDENT_AN,
-                        PLAN_ALL_30S,
+                        PLAN_SINGLE_10S,
                         USER_RECEPTIONIST,
                         "Hợp đồng thẻ tập kích hoạt qua hệ thống POS"
                 );

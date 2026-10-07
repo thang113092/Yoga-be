@@ -66,6 +66,21 @@ public class MembershipEntity extends BaseAuditEntity {
     /**
      * Only notes can be updated directly by application runtime.
      */
+    @Column(name = "replaces_membership_id", updatable = false)
+    private UUID replacesMembershipId;
+
+    @Column(name = "exchange_credit", nullable = false, updatable = false)
+    private BigDecimal exchangeCredit = BigDecimal.ZERO;
+
+    @Column(name = "exchange_base_credit", nullable = false, updatable = false)
+    private BigDecimal exchangeBaseCredit = BigDecimal.ZERO;
+
+    @Column(name = "exchange_adjusted_by", updatable = false)
+    private UUID exchangeAdjustedBy;
+
+    @Column(name = "exchange_adjustment_reason", updatable = false)
+    private String exchangeAdjustmentReason;
+
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 }

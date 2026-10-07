@@ -27,14 +27,15 @@ public class ClassScheduleController {
 
     private final ClassScheduleService scheduleService;
 
-    @Operation(summary = "Lấy danh sách ca học theo chi nhánh và khoảng thời gian")
+    @Operation(summary = "Lấy danh sách ca học theo chi nhánh, huấn luyện viên và khoảng thời gian")
     @GetMapping
     public ApiResponse<List<ScheduleDto.Resp>> getSchedules(
             @RequestParam(required = false) UUID branchId,
+            @RequestParam(required = false) UUID instructorId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end
     ) {
-        List<ScheduleDto.Resp> list = scheduleService.getSchedulesByBranch(branchId, start, end);
+        List<ScheduleDto.Resp> list = scheduleService.getSchedules(branchId, instructorId, start, end);
         return ApiResponse.success(list);
     }
 

@@ -36,6 +36,8 @@ class PosOrderServiceTest {
     private com.company.yoga.membership.order.repository.PaymentRepository paymentRepository;
     private com.company.yoga.branch.facility.repository.BranchRepository branchRepository;
     private PosOrderService service;
+    private jakarta.persistence.Query query;
+    private com.company.yoga.identity.account.service.AccessPolicy policy;
 
     @BeforeEach
     void setUp() {
@@ -45,12 +47,13 @@ class PosOrderServiceTest {
         membershipRepository = mock(MembershipRepository.class);
         paymentRepository = mock(com.company.yoga.membership.order.repository.PaymentRepository.class);
         branchRepository = mock(com.company.yoga.branch.facility.repository.BranchRepository.class);
-        var policy = mock(com.company.yoga.identity.account.service.AccessPolicy.class);
+        policy = mock(com.company.yoga.identity.account.service.AccessPolicy.class);
         var em = mock(jakarta.persistence.EntityManager.class);
-        var query = mock(jakarta.persistence.Query.class);
+        query = mock(jakarta.persistence.Query.class);
         when(em.createNativeQuery(any(String.class))).thenReturn(query);
         when(query.setParameter(any(String.class), any())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
+        when(query.getSingleResult()).thenReturn(new Object[]{null, BigDecimal.ZERO, null, BigDecimal.ZERO});
         when(policy.requireStaffBranch(any())).thenReturn(new UUID(0,1));
         service = new PosOrderService(policy, em, planRepository, orderRepository, orderItemRepository, membershipRepository, paymentRepository, branchRepository);
     }
@@ -142,5 +145,100 @@ class PosOrderServiceTest {
         assertThat(res).hasSize(1);
         assertThat(res.get(0).orderCode()).isEqualTo("ORD-12345");
         assertThat(res.get(0).status()).isEqualTo("PAID");
+    }
+
+    private UUID exchangeFixture(String issue) {
+        UUID oldId = UUID.randomUUID();
+        MembershipEntity old = new MembershipEntity();
+        old.setId(oldId); old.setPlanId(UUID.randomUUID()); old.setPurchasedPrice(new BigDecimal("2000000"));
+        when(membershipRepository.findById(oldId)).thenReturn(Optional.of(old));
+        when(query.getSingleResult()).thenReturn(new Object[]{oldId, new BigDecimal("800000"), issue, new BigDecimal("2000000")});
+        return oldId;
+    }
+
+    private UUID newPlan() {
+        UUID id = UUID.randomUUID();
+        MembershipPlanEntity plan = new MembershipPlanEntity();
+        plan.setId(id); plan.setName("30 buổi"); plan.setPrice(new BigDecimal("3000000"));
+        plan.setTotalSessions(30); plan.setDurationDays(90); plan.setIsActive(true);
+        when(planRepository.findById(id)).thenReturn(Optional.of(plan));
+        return id;
+    }
+
+    @Test
+    void existingMembershipRequiresExplicitExchange() {
+        UUID plan = newPlan(); exchangeFixture(null);
+        assertThatThrownBy(() -> service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null)))
+                .isInstanceOf(BusinessException.class);
+        verify(orderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void exchangeCreditsUnusedValueAndLinksOldMembership() {
+        UUID plan = newPlan(); UUID old = exchangeFixture(null);
+        var response = service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null,
+                old, new BigDecimal("800000"), new BigDecimal("2200000"), null, null));
+        assertThat(response.totalAmount()).isEqualByComparingTo("2200000");
+        assertThat(response.discountAmount()).isEqualByComparingTo("800000");
+        var saved = org.mockito.ArgumentCaptor.forClass(MembershipEntity.class);
+        verify(membershipRepository).save(saved.capture());
+        assertThat(saved.getValue().getReplacesMembershipId()).isEqualTo(old);
+        assertThat(saved.getValue().getExchangeBaseCredit()).isEqualByComparingTo("800000");
+    }
+
+    @Test
+    void staleQuoteIsRejectedBeforeCreatingOrder() {
+        UUID plan = newPlan(); UUID old = exchangeFixture(null);
+        assertThatThrownBy(() -> service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null,
+                old, new BigDecimal("900000"), new BigDecimal("2100000"), null, null))).isInstanceOf(BusinessException.class);
+        verify(orderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void pendingOrFrozenMembershipBlocksOrder() {
+        UUID plan = newPlan(); UUID old = exchangeFixture("Cần kết thúc bảo lưu");
+        assertThatThrownBy(() -> service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null,
+                old, new BigDecimal("800000"), new BigDecimal("2200000"), null, null))).isInstanceOf(BusinessException.class);
+        verify(orderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void receptionistCannotOverrideCredit() {
+        UUID plan = newPlan(); UUID old = exchangeFixture(null);
+        when(policy.role(any())).thenReturn("RECEPTIONIST");
+        assertThatThrownBy(() -> service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null,
+                old, new BigDecimal("800000"), new BigDecimal("2100000"), new BigDecimal("900000"), "Bảo toàn quyền lợi"))).isInstanceOf(BusinessException.class);
+        verify(orderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void managerOverrideRecordsReasonActorAndFormulaValue() {
+        UUID plan = newPlan(); UUID old = exchangeFixture(null);
+        when(policy.role(any())).thenReturn("BRANCH_MANAGER");
+        var response = service.createMembershipOrder(new PosOrderDto.CreateOrderReq(UUID.randomUUID(), UUID.randomUUID(), plan, UUID.randomUUID(), null,
+                old, new BigDecimal("800000"), new BigDecimal("2100000"), new BigDecimal("900000"), "Bảo toàn quyền lợi"));
+        assertThat(response.totalAmount()).isEqualByComparingTo("2100000");
+        var saved = org.mockito.ArgumentCaptor.forClass(MembershipEntity.class);
+        verify(membershipRepository).save(saved.capture());
+        assertThat(saved.getValue().getExchangeAdjustedBy()).isEqualTo(new UUID(0,1));
+        assertThat(saved.getValue().getExchangeAdjustmentReason()).isEqualTo("Bảo toàn quyền lợi");
+        assertThat(saved.getValue().getExchangeBaseCredit()).isEqualByComparingTo("800000");
+    }
+
+    @Test
+    void missingQuoteFunctionReturnsActionableServiceUnavailable() {
+        UUID plan = newPlan();
+        when(query.getSingleResult()).thenThrow(new RuntimeException(new java.sql.SQLException("function membership_exchange_quote does not exist", "42883")));
+        assertThatThrownBy(() -> service.getCheckoutQuote(UUID.randomUUID(), plan, UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", MembershipResultCodes.CHECKOUT_NOT_READY);
+    }
+
+    @Test
+    void unrelatedDatabaseFailureIsNotMaskedAsMigrationProblem() {
+        UUID plan = newPlan();
+        var failure = new RuntimeException(new java.sql.SQLException("connection unavailable", "08006"));
+        when(query.getSingleResult()).thenThrow(failure);
+        assertThatThrownBy(() -> service.getCheckoutQuote(UUID.randomUUID(), plan, UUID.randomUUID())).isSameAs(failure);
     }
 }

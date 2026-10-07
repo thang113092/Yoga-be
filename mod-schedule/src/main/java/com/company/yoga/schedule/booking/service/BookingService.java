@@ -63,9 +63,12 @@ public class BookingService {
             throw new BusinessException(ScheduleResultCodes.CLASS_FULL);
         }
 
-        // 2. Chặn đặt lặp ca học đang active
+        // 2. Chặn đặt lặp ca học đang active hoặc trùng khung giờ với ca học khác đã đặt
         if (bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED").isPresent()) {
             throw new BusinessException(ScheduleResultCodes.BOOKING_ALREADY_EXISTS);
+        }
+        if (bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime())) {
+            throw new BusinessException(ScheduleResultCodes.STUDENT_SCHEDULE_CONFLICT);
         }
 
         // 3. Kiểm tra tính hợp lệ của Thẻ tập (Membership Contract)
@@ -76,10 +79,15 @@ public class BookingService {
             throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_NOT_ACTIVE);
         }
 
-        // Kiểm tra chi nhánh áp dụng
-        if (!Boolean.TRUE.equals(membership.getIsAllBranches())
-                && !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
-            throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_BRANCH_MISMATCH);
+        // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép đặt tại đúng chi nhánh đã đăng ký
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches());
+        if (!isAllBranches) {
+            if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
+                    || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
+                log.warn("Chặn đặt chỗ: Học viên {} dùng thẻ đơn cơ sở {} (thuộc cơ sở {}) để đặt ca học {} (thuộc cơ sở {})",
+                        studentId, membership.getId(), membership.getRegisteredBranchId(), schedule.getId(), schedule.getBranchId());
+                throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_BRANCH_MISMATCH);
+            }
         }
 
         // Kiểm tra số buổi còn lại
@@ -186,5 +194,11 @@ public class BookingService {
     public List<BookingDto.StudentBookingDetailResp> getStudentBookingDetails(UUID studentId) {
         accessPolicy.requireStudent(studentId);
         return bookingRepository.findStudentDetails(studentId, Instant.now());
+    }
+
+    @Transactional(readOnly = true)
+    public List<BookingDto.WorkoutHistoryResp> getStudentWorkoutHistory(UUID studentId) {
+        accessPolicy.requireStudent(studentId);
+        return bookingRepository.findStudentWorkoutHistory(studentId);
     }
 }

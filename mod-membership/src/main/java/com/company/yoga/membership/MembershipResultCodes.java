@@ -13,6 +13,7 @@ public enum MembershipResultCodes implements ErrorCode {
     MEMBERSHIP_NOT_FOUND("MEMBERSHIP_404", 404, "Không tìm thấy thẻ tập của học viên", "membership.not-found"),
     MEMBERSHIP_INACTIVE("MEMBERSHIP_403", 403, "Thẻ tập chưa kích hoạt hoặc đã hết hạn", "membership.inactive"),
     INSUFFICIENT_SESSIONS("MEMBERSHIP_422", 422, "Thẻ tập đã hết lượt khả dụng", "membership.out-of-sessions"),
+    CHECKOUT_NOT_READY("CHECKOUT_503", 503, "Chức năng cấp và đổi thẻ chưa sẵn sàng. Vui lòng liên hệ quản lý để hoàn tất cập nhật hệ thống.", "membership.checkout-not-ready"),
     ORDER_NOT_FOUND("ORDER_404", 404, "Không tìm thấy đơn hàng", "order.not-found"),
     ORDER_ALREADY_PAID("ORDER_409", 409, "Đơn hàng đã được thanh toán", "order.already-paid"),
     PAYMENT_DUPLICATE_IDEMPOTENCY("PAY_409", 409, "Yêu cầu thanh toán trùng lặp (Idempotency Key đã được xử lý)", "payment.duplicate"),

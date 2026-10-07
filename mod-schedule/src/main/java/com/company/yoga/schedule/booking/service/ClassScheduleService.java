@@ -37,12 +37,17 @@ public class ClassScheduleService {
     private final com.company.yoga.schedule.booking.repository.BookingRepository bookingRepository;
 
     @Transactional(readOnly = true)
-    public List<ScheduleDto.Resp> getSchedulesByBranch(UUID branchId, Instant start, Instant end) {
+    public List<ScheduleDto.Resp> getSchedules(UUID branchId, UUID instructorId, Instant start, Instant end) {
         if (start != null && end != null && start.isAfter(end)) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
-        Instant lower = start != null ? start : Instant.now();
+        Instant lower = start != null ? start : Instant.now().minus(java.time.Duration.ofDays(7));
         Instant upper = end != null ? end : lower.plus(java.time.Duration.ofDays(31));
         if (upper.isBefore(lower) || java.time.Duration.between(lower, upper).toDays() > 93) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
-        return scheduleRepository.findSummaries(branchId, lower, upper);
+        return scheduleRepository.findSummaries(branchId, instructorId, lower, upper);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ScheduleDto.Resp> getSchedulesByBranch(UUID branchId, Instant start, Instant end) {
+        return getSchedules(branchId, null, start, end);
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +97,16 @@ public class ClassScheduleService {
             userBranchRepository.saveAndFlush(assignment);
         }
 
+        // 3. Kiểm tra trùng lịch phòng tập
+        if (scheduleRepository.existsOverlappingRoomSchedule(req.roomId(), req.startTime(), req.endTime())) {
+            throw new BusinessException(ScheduleResultCodes.ROOM_SCHEDULE_OVERLAP);
+        }
+
+        // 4. Kiểm tra trùng lịch huấn luyện viên
+        if (scheduleRepository.existsOverlappingInstructorSchedule(req.instructorId(), req.startTime(), req.endTime())) {
+            throw new BusinessException(ScheduleResultCodes.INSTRUCTOR_SCHEDULE_OVERLAP);
+        }
+
         ClassScheduleEntity entity = new ClassScheduleEntity();
         entity.setBranchId(req.branchId());
         entity.setRoomId(req.roomId());
@@ -123,7 +138,10 @@ public class ClassScheduleService {
     public List<com.company.yoga.schedule.booking.dto.BookingDto.AttendeeResp> getScheduleAttendees(UUID scheduleId) {
         ClassScheduleEntity entity = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
-        accessPolicy.requireStaffBranch(entity.getBranchId());
+        var caller = accessPolicy.actor();
+        if (!"INSTRUCTOR".equalsIgnoreCase(accessPolicy.role(caller)) || !entity.getInstructorId().equals(caller.getId())) {
+            accessPolicy.requireStaffBranch(entity.getBranchId());
+        }
 
         return bookingRepository.findScheduleAttendees(scheduleId);
     }

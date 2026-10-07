@@ -59,8 +59,37 @@ public final class BookingDto {
             UUID studentId,
             String studentName,
             String studentPhone,
+            String studentEmail,
+            String studentGender,
             Integer matNumber,
             String status,
-            Instant bookingTime
+            Instant bookingTime,
+            Instant checkedInAt
+    ) {
+        public AttendeeResp(UUID id, String bookingCode, UUID studentId, String studentName, String studentPhone, Integer matNumber, String status, Instant bookingTime) {
+            this(id, bookingCode, studentId, studentName, studentPhone, null, null, matNumber, status, bookingTime, null);
+        }
+    }
+
+    public record WorkoutHistoryResp(
+            UUID bookingId,
+            String bookingCode,
+            UUID scheduleId,
+            String className,
+            String intensityLevel,
+            String instructorName,
+            String roomName,
+            String branchName,
+            UUID branchId,
+            Instant startTime,
+            Instant endTime,
+            Integer durationMinutes,
+            Integer matNumber,
+            String status,
+            Instant checkedInAt,
+            String checkInMethod,
+            String attendanceStatus,
+            String membershipCode,
+            String notes
     ) {}
 }

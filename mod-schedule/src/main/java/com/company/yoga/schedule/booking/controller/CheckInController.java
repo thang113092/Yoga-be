@@ -22,10 +22,17 @@ public class CheckInController {
 
     private final CheckInService checkInService;
 
-    @Operation(summary = "Thực hiện điểm danh (Cửa sổ 30 phút trước ca, chống trùng lặp)")
+    @Operation(summary = "Thực hiện điểm danh (Cửa sổ trước/trong ca, chống trùng lặp)")
     @PostMapping
     public ApiResponse<CheckInDto.CheckInResp> checkIn(@Valid @RequestBody CheckInDto.CheckInReq req) {
         CheckInDto.CheckInResp resp = checkInService.processCheckIn(req);
         return ApiResponse.success(resp);
+    }
+
+    @Operation(summary = "Hủy / Hoàn tác điểm danh cho học viên")
+    @PostMapping("/revert/{bookingId}")
+    public ApiResponse<Void> revertCheckIn(@org.springframework.web.bind.annotation.PathVariable java.util.UUID bookingId) {
+        checkInService.revertCheckIn(bookingId);
+        return ApiResponse.success(null, "Đã hoàn tác điểm danh");
     }
 }

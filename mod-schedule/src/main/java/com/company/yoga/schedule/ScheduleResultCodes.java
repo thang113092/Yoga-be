@@ -25,6 +25,9 @@ public enum ScheduleResultCodes implements ErrorCode {
     INSTRUCTOR_NOT_ELIGIBLE("SCHED_422_INSTRUCTOR", 422, "Huấn luyện viên không hoạt động hoặc không được phân công tại chi nhánh này", "schedule.instructor-not-eligible"),
     ROOM_INACTIVE("SCHED_422_ROOM_INACTIVE", 422, "Phòng tập đang tạm ngưng hoạt động hoặc không thuộc chi nhánh này", "schedule.room-inactive"),
     ROOM_CAPACITY_EXCEEDED("SCHED_422_ROOM_CAPACITY", 422, "Sức chứa ca học vượt quá sức chứa tối đa của phòng tập", "schedule.room-capacity-exceeded"),
+    ROOM_SCHEDULE_OVERLAP("SCHED_409_ROOM_OVERLAP", 409, "Phòng tập đã có ca học khác trong khung giờ đã chọn", "schedule.room-overlap"),
+    INSTRUCTOR_SCHEDULE_OVERLAP("SCHED_409_INSTRUCTOR_OVERLAP", 409, "Huấn luyện viên đã có lịch dạy lớp khác trong khung giờ đã chọn", "schedule.instructor-overlap"),
+    STUDENT_SCHEDULE_CONFLICT("BOOKING_409_CONFLICT", 409, "Bạn đã có một ca học khác trong khung giờ này. Vui lòng kiểm tra lại lịch học cá nhân.", "booking.student-time-conflict"),
     CLASS_TYPE_NOT_FOUND("CLASS_TYPE_404", 404, "Không tìm thấy bộ môn yoga", "class-type.not-found"),
     CLASS_TYPE_IN_USE("CLASS_TYPE_409_IN_USE", 409, "Không thể xóa bộ môn vì đã có các ca học được xếp lịch", "class-type.in-use");
 

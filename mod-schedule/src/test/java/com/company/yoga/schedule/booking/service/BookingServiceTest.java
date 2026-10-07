@@ -116,6 +116,8 @@ class BookingServiceTest {
         when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
         when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
                 .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(false);
         when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
         when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> {
             BookingEntity b = invocation.getArgument(0);
@@ -159,6 +161,21 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("Báo lỗi STUDENT_SCHEDULE_CONFLICT khi học viên đã có ca học khác trùng khung giờ")
+    void testCreateBooking_ThrowsScheduleConflict_WhenTimeOverlaps() {
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
+                .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(true);
+
+        BookingDto.CreateReq req = new BookingDto.CreateReq(scheduleId, studentId, membershipId, null);
+        BusinessException ex = assertThrows(BusinessException.class, () -> bookingService.createBooking(req));
+
+        assertEquals(ScheduleResultCodes.STUDENT_SCHEDULE_CONFLICT, ex.getErrorCode());
+    }
+
+    @Test
     @DisplayName("Hủy đặt chỗ thành công trước khi ca học bắt đầu")
     void testCancelBooking_Success_BeforeStartTime() {
         UUID bookingId = UUID.randomUUID();
@@ -193,5 +210,88 @@ class BookingServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class, () -> bookingService.cancelBooking(bookingId, null));
         assertEquals(ScheduleResultCodes.CANCELLATION_WINDOW_CLOSED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Báo lỗi MEMBERSHIP_BRANCH_MISMATCH khi dùng thẻ đơn cơ sở đặt lớp ở cơ sở khác")
+    void testCreateBooking_ThrowsBranchMismatch_WhenSingleBranchDifferent() {
+        UUID otherBranchId = UUID.randomUUID();
+        schedule.setBranchId(otherBranchId);
+
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
+                .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(false);
+        when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
+
+        BookingDto.CreateReq req = new BookingDto.CreateReq(scheduleId, studentId, membershipId, null);
+        BusinessException ex = assertThrows(BusinessException.class, () -> bookingService.createBooking(req));
+
+        assertEquals(ScheduleResultCodes.MEMBERSHIP_BRANCH_MISMATCH, ex.getErrorCode());
+        org.mockito.Mockito.verify(bookingRepository, org.mockito.Mockito.never()).save(any(BookingEntity.class));
+    }
+
+    @Test
+    @DisplayName("Cho phép đặt chỗ ở bất kỳ cơ sở nào khi dùng thẻ toàn chuỗi (isAllBranches = true)")
+    void testCreateBooking_Success_WhenAllBranchesMembership() {
+        UUID otherBranchId = UUID.randomUUID();
+        schedule.setBranchId(otherBranchId);
+        membership.setIsAllBranches(true);
+
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
+                .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(false);
+        when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
+        when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> {
+            BookingEntity b = invocation.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+
+        BookingDto.CreateReq req = new BookingDto.CreateReq(scheduleId, studentId, membershipId, 1);
+        BookingDto.Resp resp = bookingService.createBooking(req);
+
+        assertNotNull(resp);
+        assertEquals("CONFIRMED", resp.status());
+        verify(bookingRepository).save(any(BookingEntity.class));
+    }
+
+    @Test
+    @DisplayName("Lấy lịch sử tập luyện của học viên thành công")
+    void testGetStudentWorkoutHistory() {
+        UUID studentId = UUID.randomUUID();
+        BookingDto.WorkoutHistoryResp item = new BookingDto.WorkoutHistoryResp(
+                UUID.randomUUID(),
+                "BK-TEST",
+                UUID.randomUUID(),
+                "Hatha Yoga",
+                "BEGINNER",
+                "HLV Mai",
+                "Phòng Sen",
+                "Cơ sở Q1",
+                UUID.randomUUID(),
+                Instant.now().minus(java.time.Duration.ofDays(1)),
+                Instant.now().minus(java.time.Duration.ofDays(1)).plus(java.time.Duration.ofMinutes(60)),
+                60,
+                5,
+                "ATTENDED",
+                Instant.now().minus(java.time.Duration.ofDays(1)),
+                "QR_SCAN",
+                "PRESENT",
+                "MB-001",
+                "Check-in đúng giờ"
+        );
+        when(bookingRepository.findStudentWorkoutHistory(studentId)).thenReturn(java.util.List.of(item));
+
+        java.util.List<BookingDto.WorkoutHistoryResp> result = bookingService.getStudentWorkoutHistory(studentId);
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals("Hatha Yoga", result.get(0).className());
+        verify(accessPolicy).requireStudent(studentId);
+        verify(bookingRepository).findStudentWorkoutHistory(studentId);
     }
 }

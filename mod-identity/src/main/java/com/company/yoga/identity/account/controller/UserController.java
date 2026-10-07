@@ -55,7 +55,7 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST', 'INSTRUCTOR')")
     @Operation(summary = "Lấy danh sách người dùng theo phân quyền")
     public ApiResponse<List<UserDto.UserResponse>> getUsers(
             @RequestParam(required = false) String branchId,

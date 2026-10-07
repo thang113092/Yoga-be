@@ -88,10 +88,16 @@ public class CheckInService {
             throw new BusinessException(ScheduleResultCodes.BOOKING_NOT_CONFIRMED);
         }
 
-        // 3. Kiểm tra cửa sổ thời gian điểm danh (Mở trước ca 30 phút, đóng khi ca kết thúc)
+        // 3. Kiểm tra cửa sổ thời gian điểm danh (HLV có cửa sổ linh hoạt để điểm danh trước/trong/sau ca)
         Instant now = Instant.now();
-        Instant openWindow = schedule.getStartTime().minus(Duration.ofMinutes(30));
-        Instant closeWindow = schedule.getEndTime();
+        boolean isInstructorAction = "INSTRUCTOR_CONFIRM".equalsIgnoreCase(req.checkInMethod())
+                || "INSTRUCTOR".equalsIgnoreCase(accessPolicy.role(accessPolicy.actor()));
+        Instant openWindow = isInstructorAction
+                ? schedule.getStartTime().minus(Duration.ofHours(2))
+                : schedule.getStartTime().minus(Duration.ofMinutes(30));
+        Instant closeWindow = isInstructorAction
+                ? schedule.getEndTime().plus(Duration.ofHours(12))
+                : schedule.getEndTime();
 
         if (now.isBefore(openWindow)) {
             throw new BusinessException(ScheduleResultCodes.CHECKIN_WINDOW_NOT_OPEN);
@@ -132,5 +138,18 @@ public class CheckInService {
                 booking.getMatNumber(),
                 false
         );
+    }
+
+    @Transactional
+    public void revertCheckIn(UUID bookingId) {
+        BookingEntity booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BusinessException(ScheduleResultCodes.BOOKING_NOT_FOUND));
+        ClassScheduleEntity schedule = scheduleRepository.findByIdWithLock(booking.getScheduleId())
+                .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
+        accessPolicy.requireInstructorSchedule(schedule.getBranchId(), schedule.getInstructorId());
+
+        attendanceRecordRepository.findByBookingId(bookingId).ifPresent(attendanceRecordRepository::delete);
+        booking.setStatus("CONFIRMED");
+        bookingRepository.save(booking);
     }
 }

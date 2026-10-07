@@ -22,8 +22,20 @@ public final class PosOrderDto {
             @NotNull(message = "Thu ngân không được để trống")
             UUID cashierId,
 
-            String notes
-    ) {}
+            String notes,
+            UUID replacesMembershipId,
+            BigDecimal expectedCredit,
+            BigDecimal expectedTotal,
+            BigDecimal adjustedCredit,
+            String adjustmentReason
+    ) {
+        public CreateOrderReq(UUID branchId, UUID studentId, UUID planId, UUID cashierId, String notes) {
+            this(branchId, studentId, planId, cashierId, notes, null, BigDecimal.ZERO, null, null, null);
+        }
+    }
+
+    public record CheckoutQuote(com.company.yoga.membership.plan.dto.MembershipDto.Resp currentMembership,
+            String currentPlanName, BigDecimal contractValue, BigDecimal credit, BigDecimal totalAmount, String issue) {}
 
     public record OrderResp(
             UUID orderId,

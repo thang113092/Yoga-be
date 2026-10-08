@@ -197,9 +197,12 @@ public class PosOrderService {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     public void cancelPendingOrder(UUID orderId) {
-        var order = orderRepository.findByIdWithLock(orderId).orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
+        boolean course = orderItemRepository.findByOrderId(orderId).stream().anyMatch(i -> "COURSE_CLASS".equals(i.getItemType()));
+        var order = (course ? orderRepository.findById(orderId) : orderRepository.findByIdWithLock(orderId))
+                .orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
         accessPolicy.requireStaffBranch(order.getBranchId());
-        entityManager.createNativeQuery("SELECT 1 FROM yoga.cancel_pending_membership_order(:id)").setParameter("id", orderId).getSingleResult();
+        entityManager.createNativeQuery(course ? "SELECT 1 FROM yoga.cancel_pending_course_order(:id)" :
+                "SELECT 1 FROM yoga.cancel_pending_membership_order(:id)").setParameter("id", orderId).getSingleResult();
     }
 
     @Transactional(readOnly = true)

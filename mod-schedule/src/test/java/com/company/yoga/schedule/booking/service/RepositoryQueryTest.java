@@ -22,7 +22,8 @@ class RepositoryQueryTest {
             var metadata = new MetadataSources(registry);
             for (var entity : new Class<?>[]{ClassScheduleEntity.class, ClassTypeEntity.class,
                     BookingEntity.class, WaitlistEntity.class, BranchEntity.class, RoomEntity.class, UserEntity.class,
-                    AttendanceRecordEntity.class, com.company.yoga.membership.plan.entity.MembershipEntity.class}) {
+                    AttendanceRecordEntity.class, com.company.yoga.membership.plan.entity.MembershipEntity.class,
+                    com.company.yoga.schedule.course.CourseClassEntity.class}) {
                 metadata.addAnnotatedClass(entity);
             }
             try (var factory = metadata.buildMetadata().buildSessionFactory(); var session = factory.openSession()) {

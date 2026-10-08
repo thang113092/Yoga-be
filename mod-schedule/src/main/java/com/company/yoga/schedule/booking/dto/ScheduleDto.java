@@ -22,8 +22,17 @@ public final class ScheduleDto {
             Integer maxCapacity,
             Integer bookedCount,
             Integer availableSlots,
-            String status
-    ) {}
+            String status,
+            UUID courseClassId,
+            Integer sessionNumber
+    ) {
+        public Resp(UUID id, UUID branchId, String branchName, UUID roomId, UUID instructorId,
+                    String className, String instructorName, String roomName, Instant startTime, Instant endTime,
+                    Integer maxCapacity, Integer bookedCount, Integer availableSlots, String status) {
+            this(id,branchId,branchName,roomId,instructorId,className,instructorName,roomName,startTime,endTime,
+                    maxCapacity,bookedCount,availableSlots,status,null,null);
+        }
+    }
 
     public record CreateReq(
             @NotNull(message = "Chi nhánh không được để trống")

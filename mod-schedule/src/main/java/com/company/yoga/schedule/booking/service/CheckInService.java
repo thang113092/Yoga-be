@@ -111,6 +111,7 @@ public class CheckInService {
         record.setScheduleId(schedule.getId());
         record.setStudentId(booking.getStudentId());
         record.setMembershipId(booking.getMembershipId());
+        record.setCourseEnrollmentId(booking.getCourseEnrollmentId());
         record.setBookingId(booking.getId());
         record.setCheckedInBranchId(req.branchId() != null ? req.branchId() : schedule.getBranchId());
         record.setCheckedInAt(now);

@@ -21,6 +21,7 @@ public class MembershipController {
 
     private final StudentMembershipService service;
 
+
     @GetMapping("/student/{studentId}")
     @Operation(summary = "Lấy danh sách thẻ tập của một học viên")
     public ApiResponse<List<MembershipDto.Resp>> getByStudent(@PathVariable UUID studentId) {

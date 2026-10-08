@@ -60,6 +60,16 @@ public class ClassScheduleService {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER')")
     public ScheduleDto.Resp createSchedule(ScheduleDto.CreateReq req) {
+        return create(req, null, null, null);
+    }
+
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER')")
+    public ScheduleDto.Resp createCourseSchedule(ScheduleDto.CreateReq req, UUID classId, int number, String title) {
+        return create(req, classId, number, title);
+    }
+
+    private ScheduleDto.Resp create(ScheduleDto.CreateReq req, UUID classId, Integer number, String title) {
         accessPolicy.requireStaffBranch(req.branchId());
         if (req.maxCapacity() <= 0 || !req.endTime().isAfter(req.startTime()) || !req.startTime().isAfter(Instant.now()))
             throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
@@ -108,6 +118,9 @@ public class ClassScheduleService {
         }
 
         ClassScheduleEntity entity = new ClassScheduleEntity();
+        entity.setCourseClassId(classId);
+        entity.setSessionNumber(number);
+        entity.setSessionTitle(title);
         entity.setBranchId(req.branchId());
         entity.setRoomId(req.roomId());
         entity.setClassTypeId(req.classTypeId());
@@ -118,6 +131,7 @@ public class ClassScheduleService {
         entity.setStatus("SCHEDULED");
 
         ClassScheduleEntity saved = scheduleRepository.save(entity);
+        scheduleRepository.flush();
         return toResp(saved);
     }
 
@@ -127,6 +141,9 @@ public class ClassScheduleService {
         ClassScheduleEntity entity = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
         accessPolicy.requireStaffBranch(entity.getBranchId());
+
+        if (entity.getCourseClassId() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT,
+                "Buổi thuộc khóa học cần đổi lịch để bảo đảm đủ số buổi đã đăng ký.");
 
         entity.setStatus("CANCELLED");
         ClassScheduleEntity saved = scheduleRepository.save(entity);
@@ -180,7 +197,7 @@ public class ClassScheduleService {
                 s.getMaxCapacity(),
                 booked,
                 available,
-                s.getStatus()
+                s.getStatus(), s.getCourseClassId(), s.getSessionNumber()
         );
     }
 }

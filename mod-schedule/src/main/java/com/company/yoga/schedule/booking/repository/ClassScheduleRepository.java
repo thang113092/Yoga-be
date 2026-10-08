@@ -25,9 +25,10 @@ public interface ClassScheduleRepository extends JpaRepository<ClassScheduleEnti
     @Query(value = "SELECT booked_count FROM yoga.class_schedules WHERE id = :id", nativeQuery = true)
     Integer currentBookedCount(@Param("id") UUID id);
 
-    @Query("SELECT new com.company.yoga.schedule.booking.dto.ScheduleDto$Resp(s.id, s.branchId, b.name, s.roomId, s.instructorId, ct.name, u.fullName, r.name, s.startTime, s.endTime, s.maxCapacity, s.bookedCount, s.maxCapacity - s.bookedCount, s.status) " +
+    @Query("SELECT new com.company.yoga.schedule.booking.dto.ScheduleDto$Resp(s.id, s.branchId, b.name, s.roomId, s.instructorId, COALESCE(cc.name, ct.name), u.fullName, r.name, s.startTime, s.endTime, s.maxCapacity, s.bookedCount, s.maxCapacity - s.bookedCount, s.status, s.courseClassId, s.sessionNumber) " +
             "FROM ClassScheduleEntity s " +
             "JOIN BranchEntity b ON b.id = s.branchId " +
+            "LEFT JOIN CourseClassEntity cc ON cc.id = s.courseClassId " +
             "JOIN ClassTypeEntity ct ON ct.id = s.classTypeId " +
             "JOIN UserEntity u ON u.id = s.instructorId " +
             "JOIN RoomEntity r ON r.id = s.roomId " +

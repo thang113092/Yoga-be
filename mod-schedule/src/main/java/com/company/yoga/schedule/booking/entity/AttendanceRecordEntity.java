@@ -23,8 +23,11 @@ public class AttendanceRecordEntity extends BaseCreationAuditEntity {
     @Column(name = "student_id", nullable = false, updatable = false)
     private UUID studentId;
 
-    @Column(name = "membership_id", nullable = false, updatable = false)
+    @Column(name = "membership_id", updatable = false)
     private UUID membershipId;
+
+    @Column(name = "course_enrollment_id", updatable = false)
+    private UUID courseEnrollmentId;
 
     @Column(name = "booking_id", nullable = false, unique = true, updatable = false)
     private UUID bookingId;

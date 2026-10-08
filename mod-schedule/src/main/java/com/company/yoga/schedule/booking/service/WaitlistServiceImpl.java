@@ -57,6 +57,7 @@ public class WaitlistServiceImpl implements WaitlistService {
         // 1. Khóa ca học để kiểm tra trạng thái
         ClassScheduleEntity schedule = scheduleRepository.findByIdWithLock(scheduleId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
+        if (schedule.getCourseClassId() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Vui lòng đăng ký toàn bộ khóa học.");
 
         accessPolicy.requireBooking(studentId, schedule.getBranchId());
         if (schedule.getInstructorId() != null && userRepository.findById(schedule.getInstructorId()).filter(u -> Boolean.TRUE.equals(u.getIsActive())).isEmpty())

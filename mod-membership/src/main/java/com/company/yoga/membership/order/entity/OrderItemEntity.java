@@ -26,6 +26,9 @@ public class OrderItemEntity extends BaseCreationAuditEntity {
     @Column(name = "item_id")
     private UUID itemId;
 
+    @Column(name = "course_class_id")
+    private UUID courseClassId;
+
     @Column(name = "item_name_snapshot", nullable = false)
     private String itemNameSnapshot;
 

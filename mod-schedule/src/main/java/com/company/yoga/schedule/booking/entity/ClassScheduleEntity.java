@@ -18,6 +18,13 @@ import lombok.Setter;
 @NoArgsConstructor
 public class ClassScheduleEntity extends BaseAuditEntity {
 
+    @Column(name = "course_class_id")
+    private UUID courseClassId;
+    @Column(name = "session_number")
+    private Integer sessionNumber;
+    @Column(name = "session_title")
+    private String sessionTitle;
+
     @Column(name = "branch_id", nullable = false)
     private UUID branchId;
 

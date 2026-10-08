@@ -53,6 +53,7 @@ public class BookingService {
         // 1. Khóa bi quan ca học để chống overbooking cạnh tranh đồng thời
         ClassScheduleEntity schedule = scheduleRepository.findByIdWithLock(scheduleId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
+        if (schedule.getCourseClassId() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Vui lòng đăng ký toàn bộ khóa học.");
 
         accessPolicy.requireBooking(studentId, schedule.getBranchId());
         if (schedule.getInstructorId() != null && userRepository.findById(schedule.getInstructorId()).filter(u -> Boolean.TRUE.equals(u.getIsActive())).isEmpty())
@@ -137,6 +138,7 @@ public class BookingService {
     public BookingDto.Resp cancelBooking(UUID bookingId, String reason) {
         BookingEntity booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.BOOKING_NOT_FOUND));
+        if (booking.getCourseEnrollmentId() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Không thể hủy riêng một buổi của khóa học.");
 
         if (!"CONFIRMED".equalsIgnoreCase(booking.getStatus())) {
             throw new BusinessException(ScheduleResultCodes.BOOKING_NOT_CONFIRMED);

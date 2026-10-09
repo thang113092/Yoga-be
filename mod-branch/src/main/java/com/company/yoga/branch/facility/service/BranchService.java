@@ -44,6 +44,14 @@ public class BranchService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<RoomResponse> getAllRooms() {
+        return roomRepository.findAll().stream()
+                .filter(r -> Boolean.TRUE.equals(r.getIsActive()))
+                .map(this::toRoomResponse)
+                .toList();
+    }
+
     @Transactional
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     public RoomResponse createRoom(UUID branchId, CreateRoomRequest req) {

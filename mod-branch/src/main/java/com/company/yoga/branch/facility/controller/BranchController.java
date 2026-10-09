@@ -78,6 +78,12 @@ public class BranchController {
         return ApiResponse.success(branchService.getRoomsByBranch(id, all));
     }
 
+    @GetMapping("/all-rooms")
+    @Operation(summary = "Lấy danh sách tất cả các phòng tập")
+    public ApiResponse<List<RoomResponse>> getAllRooms() {
+        return ApiResponse.success(branchService.getAllRooms());
+    }
+
     @PostMapping("/{id}/rooms")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Thêm mới phòng tập cho chi nhánh (Super Admin)")

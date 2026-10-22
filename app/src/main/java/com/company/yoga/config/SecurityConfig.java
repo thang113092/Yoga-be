@@ -47,14 +47,25 @@ public class SecurityConfig {
                     "/actuator/**"
                 ).permitAll()
 
-                // 2. Công khai các tra cứu đọc thông tin (để xem lịch, cơ sở, gói tập)
+                // 2. Công khai các tra cứu đọc thông tin (để xem lịch, cơ sở, gói tập, health check)
                 .requestMatchers(HttpMethod.GET,
+                    "/health",
+                    "/api/v1/health",
                     "/api/v1/branches/**",
                     "/api/v1/schedules/**",
                     "/api/v1/membership-plans/**"
                 ).permitAll()
 
-                // 3. Toàn bộ các API nghiệp vụ khác yêu cầu xác thực JWT Token
+                // 3. Công khai phương thức HEAD cho UptimeRobot / Health Check ping
+                .requestMatchers(HttpMethod.HEAD,
+                    "/health",
+                    "/api/v1/health",
+                    "/api/v1/branches/**",
+                    "/api/v1/schedules/**",
+                    "/api/v1/membership-plans/**"
+                ).permitAll()
+
+                // 4. Toàn bộ các API nghiệp vụ khác yêu cầu xác thực JWT Token
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

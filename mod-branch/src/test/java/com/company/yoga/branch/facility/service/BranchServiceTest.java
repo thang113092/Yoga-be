@@ -182,7 +182,7 @@ class BranchServiceTest {
     @Test
     @DisplayName("Tạo phòng học mới thành công")
     void createRoom_Success() {
-        CreateRoomRequest req = new CreateRoomRequest("Phòng Trúc Xanh", "Tầng 3", 18, true);
+        CreateRoomRequest req = new CreateRoomRequest("Phòng Trúc Xanh", "Tầng 3", 18, true, null, null);
         when(branchRepository.existsById(branchId)).thenReturn(true);
         when(roomRepository.existsByBranchIdAndName(branchId, "Phòng Trúc Xanh")).thenReturn(false);
         when(roomRepository.save(any(RoomEntity.class))).thenAnswer(i -> {
@@ -201,7 +201,7 @@ class BranchServiceTest {
     @Test
     @DisplayName("Tạo phòng học thất bại khi trùng tên trong cùng chi nhánh")
     void createRoom_DuplicateName() {
-        CreateRoomRequest req = new CreateRoomRequest("Phòng Sen Hồng", "Tầng 2", 20, true);
+        CreateRoomRequest req = new CreateRoomRequest("Phòng Sen Hồng", "Tầng 2", 20, true, null, null);
         when(branchRepository.existsById(branchId)).thenReturn(true);
         when(roomRepository.existsByBranchIdAndName(branchId, "Phòng Sen Hồng")).thenReturn(true);
 
@@ -213,7 +213,7 @@ class BranchServiceTest {
     @Test
     @DisplayName("Cập nhật phòng học thành công")
     void updateRoom_Success() {
-        UpdateRoomRequest req = new UpdateRoomRequest("Phòng Sen Hồng VIP", "Tầng 4", 25, true);
+        UpdateRoomRequest req = new UpdateRoomRequest("Phòng Sen Hồng VIP", "Tầng 4", 25, true, null);
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(sampleRoom));
         when(roomRepository.existsByBranchIdAndNameAndIdNot(branchId, "Phòng Sen Hồng VIP", roomId)).thenReturn(false);
         when(roomRepository.save(any(RoomEntity.class))).thenAnswer(i -> i.getArgument(0));

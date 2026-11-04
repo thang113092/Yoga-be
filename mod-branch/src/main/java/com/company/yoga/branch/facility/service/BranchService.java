@@ -72,6 +72,8 @@ public class BranchService {
         entity.setFloor(req.floor() != null ? req.floor().trim() : null);
         entity.setMaxCapacity(req.maxCapacity());
         entity.setIsActive(req.isActive() != null ? req.isActive() : true);
+        entity.setRoomType("VIRTUAL".equals(req.roomType()) ? "VIRTUAL" : "PHYSICAL");
+        entity.setLiveHostAccount(blankToNull(req.liveHostAccount()));
 
         RoomEntity saved = roomRepository.save(entity);
         return toRoomResponse(saved);
@@ -97,6 +99,7 @@ public class BranchService {
         if (req.isActive() != null) {
             entity.setIsActive(req.isActive());
         }
+        entity.setLiveHostAccount(blankToNull(req.liveHostAccount()));
 
         RoomEntity saved = roomRepository.save(entity);
         return toRoomResponse(saved);
@@ -210,7 +213,8 @@ public class BranchService {
                 e.getBankAccountHolder(),
                 e.getIsActive(),
                 e.getCreatedAt(),
-                roomCount
+                roomCount,
+                Boolean.TRUE.equals(e.getIsVirtual())
         );
     }
 
@@ -221,7 +225,19 @@ public class BranchService {
                 r.getName(),
                 r.getFloor(),
                 r.getMaxCapacity(),
-                r.getIsActive()
+                r.getIsActive(),
+                roomType(r),
+                "VIRTUAL".equals(roomType(r)) ? r.getLiveHostAccount() : null
         );
+    }
+
+    /** The database derives the type on insert, so a freshly saved entity may not carry it yet. */
+    private String roomType(RoomEntity r) {
+        if (r.getRoomType() != null) return r.getRoomType();
+        return branchRepository.findById(r.getBranchId()).filter(b -> Boolean.TRUE.equals(b.getIsVirtual())).isPresent() ? "VIRTUAL" : "PHYSICAL";
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

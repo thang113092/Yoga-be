@@ -32,10 +32,11 @@ public class ClassScheduleController {
     public ApiResponse<List<ScheduleDto.Resp>> getSchedules(
             @RequestParam(required = false) UUID branchId,
             @RequestParam(required = false) UUID instructorId,
+            @RequestParam(required = false) String deliveryMode,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end
     ) {
-        List<ScheduleDto.Resp> list = scheduleService.getSchedules(branchId, instructorId, start, end);
+        List<ScheduleDto.Resp> list = scheduleService.getSchedules(branchId, instructorId, deliveryMode, start, end);
         return ApiResponse.success(list);
     }
 

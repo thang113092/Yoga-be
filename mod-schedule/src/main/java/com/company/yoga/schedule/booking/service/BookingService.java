@@ -81,7 +81,8 @@ public class BookingService {
         }
 
         // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép đặt tại đúng chi nhánh đã đăng ký
-        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches());
+        // Online classes accept passes of any branch (ONLINE_CLASS_PLAN.md, decision 3).
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode());
         if (!isAllBranches) {
             if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
                     || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {

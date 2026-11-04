@@ -68,6 +68,24 @@ yoga:
       client-id: ${PAYOS_CLIENT_ID:}
       api-key: ${PAYOS_API_KEY:}
       checksum-key: ${PAYOS_CHECKSUM_KEY:}
+  online:
+    # Học viên vào lớp từ N phút trước giờ học (tối đa 30, theo validate_checkin).
+    join-window-minutes: ${YOGA_ONLINE_JOIN_WINDOW_MINUTES:15}
+    sync-delay-ms: ${YOGA_ONLINE_SYNC_DELAY_MS:30000}
+    zoom:
+      api-base-url: ${ZOOM_API_BASE_URL:https://api.zoom.us/v2}
+      oauth-url: ${ZOOM_OAUTH_URL:https://zoom.us/oauth/token}
+      # Server-to-Server OAuth app. Để trống thì tắt lớp online (đặt chỗ vẫn chạy, chưa vào lớp được).
+      account-id: ${ZOOM_ACCOUNT_ID:}
+      client-id: ${ZOOM_CLIENT_ID:}
+      client-secret: ${ZOOM_CLIENT_SECRET:}
+      webhook-secret: ${ZOOM_WEBHOOK_SECRET:}
+      # Host khi phòng ảo chưa khai báo tài khoản Zoom riêng.
+      default-host: ${ZOOM_DEFAULT_HOST:me}
+      # true: link riêng từng học viên (cần Zoom Pro trở lên). false: link chung của phòng, dùng để thử với Zoom Basic.
+      use-registration: ${ZOOM_USE_REGISTRATION:true}
+      # Email giả cho registrant (Zoom bắt buộc email; không gửi thư).
+      registrant-email-domain: ${ZOOM_REGISTRANT_EMAIL_DOMAIN:students.anyen.invalid}
 
 supabase:
   url: ${SUPABASE_URL:https://cagwkxiccmayrtajwdtc.supabase.co}

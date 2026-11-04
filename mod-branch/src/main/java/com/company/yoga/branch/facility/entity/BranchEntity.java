@@ -41,4 +41,8 @@ public class BranchEntity extends BaseAuditEntity {
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    /** Set by migration only (online classes live in the virtual branch). */
+    @Column(name = "is_virtual", nullable = false, insertable = false, updatable = false)
+    private Boolean isVirtual = false;
 }

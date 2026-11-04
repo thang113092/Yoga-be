@@ -56,6 +56,7 @@ public class BranchDto {
         String bankAccountHolder,
         Boolean isActive,
         Instant createdAt,
-        Long roomCount
+        Long roomCount,
+        Boolean isVirtual
     ) {}
 }

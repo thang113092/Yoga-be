@@ -30,4 +30,12 @@ public class RoomEntity extends BaseAuditEntity {
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    /** Chosen at creation and fixed afterwards (V13): VIRTUAL rooms are streaming channels (Zoom licences). */
+    @Column(name = "room_type", nullable = false, updatable = false, length = 20)
+    private String roomType = "PHYSICAL";
+
+    /** Zoom host (email or user id) for a virtual room; ignored for studio rooms. */
+    @Column(name = "live_host_account", length = 150)
+    private String liveHostAccount;
 }

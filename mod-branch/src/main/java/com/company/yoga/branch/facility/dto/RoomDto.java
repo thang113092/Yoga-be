@@ -15,7 +15,9 @@ public final class RoomDto {
         String name,
         String floor,
         Integer maxCapacity,
-        Boolean isActive
+        Boolean isActive,
+        String roomType,
+        String liveHostAccount
     ) {}
 
     public record CreateRoomRequest(
@@ -28,7 +30,14 @@ public final class RoomDto {
         @Min(value = 1, message = "Sức chứa phòng phải lớn hơn 0")
         Integer maxCapacity,
 
-        Boolean isActive
+        Boolean isActive,
+
+        @jakarta.validation.constraints.Size(max = 150, message = "Tài khoản host tối đa 150 ký tự")
+        String liveHostAccount,
+
+        /** PHYSICAL (default) or VIRTUAL (online room = one Zoom licence). Fixed after creation. */
+        @jakarta.validation.constraints.Pattern(regexp = "PHYSICAL|VIRTUAL", message = "Loại phòng không hợp lệ")
+        String roomType
     ) {}
 
     public record UpdateRoomRequest(
@@ -41,6 +50,9 @@ public final class RoomDto {
         @Min(value = 1, message = "Sức chứa phòng phải lớn hơn 0")
         Integer maxCapacity,
 
-        Boolean isActive
+        Boolean isActive,
+
+        @jakarta.validation.constraints.Size(max = 150, message = "Tài khoản host tối đa 150 ký tự")
+        String liveHostAccount
     ) {}
 }

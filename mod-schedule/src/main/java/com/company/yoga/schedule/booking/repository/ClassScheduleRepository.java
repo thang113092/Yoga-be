@@ -25,7 +25,7 @@ public interface ClassScheduleRepository extends JpaRepository<ClassScheduleEnti
     @Query(value = "SELECT booked_count FROM yoga.class_schedules WHERE id = :id", nativeQuery = true)
     Integer currentBookedCount(@Param("id") UUID id);
 
-    @Query("SELECT new com.company.yoga.schedule.booking.dto.ScheduleDto$Resp(s.id, s.branchId, b.name, s.roomId, s.instructorId, COALESCE(cc.name, ct.name), u.fullName, r.name, s.startTime, s.endTime, s.maxCapacity, s.bookedCount, s.maxCapacity - s.bookedCount, s.status, s.courseClassId, s.sessionNumber) " +
+    @Query("SELECT new com.company.yoga.schedule.booking.dto.ScheduleDto$Resp(s.id, s.branchId, b.name, s.roomId, s.instructorId, COALESCE(cc.name, ct.name), u.fullName, r.name, s.startTime, s.endTime, s.maxCapacity, s.bookedCount, s.maxCapacity - s.bookedCount, s.status, s.courseClassId, s.sessionNumber, s.deliveryMode) " +
             "FROM ClassScheduleEntity s " +
             "JOIN BranchEntity b ON b.id = s.branchId " +
             "LEFT JOIN CourseClassEntity cc ON cc.id = s.courseClassId " +
@@ -35,10 +35,12 @@ public interface ClassScheduleRepository extends JpaRepository<ClassScheduleEnti
             "WHERE u.isActive = true " +
             "AND (:branchId IS NULL OR s.branchId = :branchId) " +
             "AND (:instructorId IS NULL OR s.instructorId = :instructorId) " +
+            "AND (:mode IS NULL OR s.deliveryMode = :mode) " +
             "AND s.startTime >= :start AND s.startTime < :end ORDER BY s.startTime")
     List<com.company.yoga.schedule.booking.dto.ScheduleDto.Resp> findSummaries(
             @Param("branchId") UUID branchId,
             @Param("instructorId") UUID instructorId,
+            @Param("mode") String mode,
             @Param("start") Instant start,
             @Param("end") Instant end
     );
@@ -47,6 +49,12 @@ public interface ClassScheduleRepository extends JpaRepository<ClassScheduleEnti
 
     @Query("SELECT COUNT(s) > 0 FROM ClassScheduleEntity s WHERE s.roomId = :roomId AND s.status <> 'CANCELLED' AND s.startTime < :endTime AND s.endTime > :startTime")
     boolean existsOverlappingRoomSchedule(@Param("roomId") UUID roomId, @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);
+
+    /** One Zoom user hosts one meeting at a time; rooms without a host share the default account (V13). */
+    @Query(value = "SELECT EXISTS(SELECT 1 FROM yoga.class_schedules s JOIN yoga.rooms r ON r.id = s.room_id " +
+            "WHERE s.delivery_mode = 'ONLINE' AND s.status <> 'CANCELLED' AND s.start_time < :endTime AND s.end_time > :startTime " +
+            "AND COALESCE(lower(r.live_host_account), '') = (SELECT COALESCE(lower(live_host_account), '') FROM yoga.rooms WHERE id = :roomId))", nativeQuery = true)
+    boolean existsLiveHostOverlap(@Param("roomId") UUID roomId, @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);
 
     @Query("SELECT COUNT(s) > 0 FROM ClassScheduleEntity s WHERE s.instructorId = :instructorId AND s.status <> 'CANCELLED' AND s.startTime < :endTime AND s.endTime > :startTime")
     boolean existsOverlappingInstructorSchedule(@Param("instructorId") UUID instructorId, @Param("startTime") Instant startTime, @Param("endTime") Instant endTime);

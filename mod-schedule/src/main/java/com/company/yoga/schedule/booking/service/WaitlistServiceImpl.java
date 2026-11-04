@@ -94,7 +94,8 @@ public class WaitlistServiceImpl implements WaitlistService {
         }
 
         // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép vào hàng chờ tại đúng chi nhánh đã đăng ký
-        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches());
+        // Online classes accept passes of any branch (ONLINE_CLASS_PLAN.md, decision 3).
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode());
         if (!isAllBranches) {
             if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
                     || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
@@ -203,7 +204,7 @@ public class WaitlistServiceImpl implements WaitlistService {
                     && (mb.getRemainingSessions() == null || mb.getRemainingSessions() > 0)
                     && (mb.getStartDate() == null || !scheduleDate.isBefore(mb.getStartDate()))
                     && (mb.getEndDate() == null || !scheduleDate.isAfter(mb.getEndDate()))
-                    && (Boolean.TRUE.equals(mb.getIsAllBranches()) || Objects.equals(mb.getRegisteredBranchId(), schedule.getBranchId()))
+                    && (Boolean.TRUE.equals(mb.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode()) || Objects.equals(mb.getRegisteredBranchId(), schedule.getBranchId()))
                     && Objects.equals(mb.getStudentId(), candidate.getStudentId())
                     && userRepository.findById(candidate.getStudentId()).map(u -> Boolean.TRUE.equals(u.getIsActive())).orElse(false)
                     && bookingRepository.activeBookingCount(scheduleId, candidate.getStudentId()) == 0

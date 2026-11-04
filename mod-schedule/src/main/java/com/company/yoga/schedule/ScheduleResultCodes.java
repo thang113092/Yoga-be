@@ -29,7 +29,13 @@ public enum ScheduleResultCodes implements ErrorCode {
     INSTRUCTOR_SCHEDULE_OVERLAP("SCHED_409_INSTRUCTOR_OVERLAP", 409, "Huấn luyện viên đã có lịch dạy lớp khác trong khung giờ đã chọn", "schedule.instructor-overlap"),
     STUDENT_SCHEDULE_CONFLICT("BOOKING_409_CONFLICT", 409, "Bạn đã có một ca học khác trong khung giờ này. Vui lòng kiểm tra lại lịch học cá nhân.", "booking.student-time-conflict"),
     CLASS_TYPE_NOT_FOUND("CLASS_TYPE_404", 404, "Không tìm thấy bộ môn yoga", "class-type.not-found"),
-    CLASS_TYPE_IN_USE("CLASS_TYPE_409_IN_USE", 409, "Không thể xóa bộ môn vì đã có các ca học được xếp lịch", "class-type.in-use");
+    CLASS_TYPE_IN_USE("CLASS_TYPE_409_IN_USE", 409, "Không thể xóa bộ môn vì đã có các ca học được xếp lịch", "class-type.in-use"),
+    LIVE_HOST_OVERLAP("ONLINE_409_HOST", 409, "Tài khoản Zoom của phòng online này đã có lớp khác trong khung giờ đã chọn (các phòng chưa khai báo host dùng chung tài khoản mặc định)", "online.host-overlap"),
+    NOT_ONLINE_CLASS("ONLINE_400", 400, "Ca học này không phải lớp online", "online.not-online-class"),
+    ONLINE_JOIN_NOT_OPEN("ONLINE_422_NOT_OPEN", 422, "Chưa đến giờ vào lớp. Phòng học mở trước giờ học 15 phút", "online.join-not-open"),
+    ONLINE_CLASS_ENDED("ONLINE_422_ENDED", 422, "Lớp online đã kết thúc", "online.class-ended"),
+    ONLINE_NOT_CONFIGURED("ONLINE_503_CONFIG", 503, "Hệ thống lớp online chưa được cấu hình. Vui lòng liên hệ quản trị", "online.not-configured"),
+    ONLINE_ROOM_NOT_READY("ONLINE_503_NOT_READY", 503, "Phòng học online chưa sẵn sàng. Vui lòng thử lại sau ít phút", "online.room-not-ready");
 
     private final String code;
     private final int httpStatusCode;

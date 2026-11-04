@@ -50,7 +50,8 @@ public final class BookingDto {
             Integer matNumber,
             String status,
             Instant bookingTime,
-            boolean canCancel
+            boolean canCancel,
+            String deliveryMode
     ) {}
 
     public record AttendeeResp(

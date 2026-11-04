@@ -29,3 +29,15 @@ services:
         sync: false
       - key: YOGA_PAYMENT_RETURN_URL
         sync: false
+      - key: ZOOM_ACCOUNT_ID
+        sync: false
+      - key: ZOOM_CLIENT_ID
+        sync: false
+      - key: ZOOM_CLIENT_SECRET
+        sync: false
+      - key: ZOOM_WEBHOOK_SECRET
+        sync: false
+      - key: ZOOM_DEFAULT_HOST
+        sync: false
+      - key: ZOOM_USE_REGISTRATION
+        sync: false

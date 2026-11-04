@@ -38,11 +38,17 @@ public class ClassScheduleService {
 
     @Transactional(readOnly = true)
     public List<ScheduleDto.Resp> getSchedules(UUID branchId, UUID instructorId, Instant start, Instant end) {
+        return getSchedules(branchId, instructorId, null, start, end);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ScheduleDto.Resp> getSchedules(UUID branchId, UUID instructorId, String deliveryMode, Instant start, Instant end) {
+        if (deliveryMode != null && !java.util.Set.of("IN_PERSON", "ONLINE").contains(deliveryMode)) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
         if (start != null && end != null && start.isAfter(end)) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
         Instant lower = start != null ? start : Instant.now().minus(java.time.Duration.ofDays(7));
         Instant upper = end != null ? end : lower.plus(java.time.Duration.ofDays(31));
         if (upper.isBefore(lower) || java.time.Duration.between(lower, upper).toDays() > 93) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST);
-        return scheduleRepository.findSummaries(branchId, instructorId, lower, upper);
+        return scheduleRepository.findSummaries(branchId, instructorId, deliveryMode, lower, upper);
     }
 
     @Transactional(readOnly = true)
@@ -110,6 +116,11 @@ public class ClassScheduleService {
         // 3. Kiểm tra trùng lịch phòng tập
         if (scheduleRepository.existsOverlappingRoomSchedule(req.roomId(), req.startTime(), req.endTime())) {
             throw new BusinessException(ScheduleResultCodes.ROOM_SCHEDULE_OVERLAP);
+        }
+
+        // 3b. Lớp online: một tài khoản Zoom chỉ dạy được một lớp tại một thời điểm (kể cả ở cơ sở khác)
+        if ("VIRTUAL".equals(room.getRoomType()) && scheduleRepository.existsLiveHostOverlap(req.roomId(), req.startTime(), req.endTime())) {
+            throw new BusinessException(ScheduleResultCodes.LIVE_HOST_OVERLAP);
         }
 
         // 4. Kiểm tra trùng lịch huấn luyện viên
@@ -197,7 +208,9 @@ public class ClassScheduleService {
                 s.getMaxCapacity(),
                 booked,
                 available,
-                s.getStatus(), s.getCourseClassId(), s.getSessionNumber()
+                s.getStatus(), s.getCourseClassId(), s.getSessionNumber(),
+                s.getDeliveryMode() != null ? s.getDeliveryMode()
+                        : roomRepository.findById(s.getRoomId()).filter(r -> "VIRTUAL".equals(r.getRoomType())).map(r -> "ONLINE").orElse("IN_PERSON")
         );
     }
 }

@@ -58,4 +58,8 @@ public class ClassScheduleEntity extends BaseAuditEntity {
 
     @Column(name = "version", nullable = false, insertable = false, updatable = false)
     private Long version;
+
+    /** Derived by the database from the room: ONLINE for virtual rooms. */
+    @Column(name = "delivery_mode", nullable = false, insertable = false, updatable = false, length = 20)
+    private String deliveryMode;
 }

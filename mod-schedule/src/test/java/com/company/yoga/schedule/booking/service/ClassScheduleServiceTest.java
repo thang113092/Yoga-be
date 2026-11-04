@@ -145,6 +145,23 @@ class ClassScheduleServiceTest {
     }
 
     @Test
+    @DisplayName("Lớp online thất bại khi tài khoản Zoom của phòng đã có lớp khác cùng giờ (kể cả ở cơ sở khác)")
+    void createSchedule_ThrowsLiveHostOverlap_ForVirtualRoom() {
+        room.setRoomType("VIRTUAL");
+        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(userRepository.findById(instructorId)).thenReturn(Optional.of(instructor));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(instructorRole));
+        when(userBranchRepository.existsByUserIdAndBranchId(instructorId, branchId)).thenReturn(true);
+        when(scheduleRepository.existsOverlappingRoomSchedule(roomId, startTime, endTime)).thenReturn(false);
+        when(scheduleRepository.existsLiveHostOverlap(roomId, startTime, endTime)).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                classScheduleService.createSchedule(createReq));
+
+        assertEquals(ScheduleResultCodes.LIVE_HOST_OVERLAP, ex.getErrorCode());
+    }
+
+    @Test
     @DisplayName("Tạo lịch thành công khi không trùng phòng và không trùng huấn luyện viên")
     void createSchedule_Success_WhenNoOverlap() {
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));

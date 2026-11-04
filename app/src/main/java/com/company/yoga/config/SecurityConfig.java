@@ -67,6 +67,8 @@ public class SecurityConfig {
 
                 // 4. Webhook cổng thanh toán: không có JWT, chỉ tin chữ ký HMAC trong nội dung
                 .requestMatchers(HttpMethod.POST, "/api/v1/payment-webhooks/**").permitAll()
+                // Webhook Zoom (lớp online): chỉ tin chữ ký x-zm-signature
+                .requestMatchers(HttpMethod.POST, "/api/v1/integration-webhooks/**").permitAll()
 
                 // 5. Toàn bộ các API nghiệp vụ khác yêu cầu xác thực JWT Token
                 .anyRequest().authenticated()

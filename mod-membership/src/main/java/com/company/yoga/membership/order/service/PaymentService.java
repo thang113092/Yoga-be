@@ -47,6 +47,9 @@ public class PaymentService {
         }
         if ("PAID".equals(order.getStatus())) throw new BusinessException(MembershipResultCodes.ORDER_ALREADY_PAID);
         if (!"PENDING".equals(order.getStatus())) throw new BusinessException(CommonErrorCode.CONFLICT);
+        if (paymentRepository.findByOrderId(order.getId()).stream()
+                .anyMatch(p -> "PENDING".equals(p.getPaymentStatus()) && Set.of("PAYOS", "VNPAY").contains(p.getPaymentMethod())))
+            throw new BusinessException(MembershipResultCodes.ONLINE_PAYMENT_PENDING);
         PaymentEntity payment = new PaymentEntity();
         payment.setPaymentCode("PAY-" + UUID.randomUUID());
         payment.setOrderId(order.getId()); payment.setBranchId(order.getBranchId()); payment.setAmount(order.getTotalAmount());

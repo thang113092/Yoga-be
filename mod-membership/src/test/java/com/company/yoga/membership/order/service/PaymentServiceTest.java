@@ -175,4 +175,29 @@ class PaymentServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", MembershipResultCodes.ORDER_ALREADY_PAID);
     }
+
+    @Test
+    @DisplayName("Đơn đang có mã VietQR chờ thanh toán thì không thu tiền mặt chồng lên")
+    void processPayment_onlinePaymentPending_throwsBusinessException() {
+        UUID orderId = UUID.randomUUID();
+        UUID idempotencyKey = UUID.randomUUID();
+
+        OrderEntity order = new OrderEntity();
+        order.setId(orderId);
+        order.setStatus("PENDING");
+        PaymentEntity online = new PaymentEntity();
+        online.setPaymentMethod("PAYOS");
+        online.setPaymentStatus("PENDING");
+
+        when(paymentRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdWithLock(orderId)).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderId(orderId)).thenReturn(List.of(online));
+
+        PaymentDto.PayReq req = new PaymentDto.PayReq(orderId, "CASH", idempotencyKey, UUID.randomUUID(), null, null);
+
+        assertThatThrownBy(() -> paymentService.processPayment(req))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", MembershipResultCodes.ONLINE_PAYMENT_PENDING);
+        verify(paymentRepository, never()).saveAndFlush(any());
+    }
 }

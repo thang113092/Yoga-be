@@ -21,3 +21,11 @@ services:
         sync: false
       - key: YOGA_CORS_ORIGINS
         sync: false
+      - key: PAYOS_CLIENT_ID
+        sync: false
+      - key: PAYOS_API_KEY
+        sync: false
+      - key: PAYOS_CHECKSUM_KEY
+        sync: false
+      - key: YOGA_PAYMENT_RETURN_URL
+        sync: false

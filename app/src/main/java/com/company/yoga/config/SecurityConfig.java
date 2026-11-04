@@ -65,7 +65,10 @@ public class SecurityConfig {
                     "/api/v1/membership-plans/**"
                 ).permitAll()
 
-                // 4. Toàn bộ các API nghiệp vụ khác yêu cầu xác thực JWT Token
+                // 4. Webhook cổng thanh toán: không có JWT, chỉ tin chữ ký HMAC trong nội dung
+                .requestMatchers(HttpMethod.POST, "/api/v1/payment-webhooks/**").permitAll()
+
+                // 5. Toàn bộ các API nghiệp vụ khác yêu cầu xác thực JWT Token
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

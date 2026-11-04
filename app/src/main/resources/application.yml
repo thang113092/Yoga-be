@@ -57,6 +57,18 @@ logging:
     root: INFO
     com.company.yoga: DEBUG
 
+yoga:
+  payments:
+    link-ttl-minutes: ${YOGA_PAYMENT_LINK_TTL_MINUTES:15}
+    reconcile-delay-ms: ${YOGA_PAYMENT_RECONCILE_DELAY_MS:120000}
+    # PayOS opens this page after payment; status is always read from the backend.
+    return-url: ${YOGA_PAYMENT_RETURN_URL:http://localhost:4200/membership/pos}
+    payos:
+      base-url: ${PAYOS_BASE_URL:https://api-merchant.payos.vn}
+      client-id: ${PAYOS_CLIENT_ID:}
+      api-key: ${PAYOS_API_KEY:}
+      checksum-key: ${PAYOS_CHECKSUM_KEY:}
+
 supabase:
   url: ${SUPABASE_URL:https://cagwkxiccmayrtajwdtc.supabase.co}
   publishable-key: ${SUPABASE_PUBLISHABLE_KEY:sb_publishable_Zxasgx3qbMKuwMgN8gObXg_0cZmM0PV}

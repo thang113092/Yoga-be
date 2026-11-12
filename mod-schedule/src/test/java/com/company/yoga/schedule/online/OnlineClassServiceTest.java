@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -103,6 +104,16 @@ class OnlineClassServiceTest {
         assertThat(saved.getValue().getCheckedInBy()).isEqualTo(student.getId());
         assertThat(saved.getValue().getCheckedInBranchId()).isEqualTo(schedule.getBranchId());
         assertThat(booking.getStatus()).isEqualTo("ATTENDED");
+    }
+
+    @Test
+    @DisplayName("Buổi của khóa học online chưa thanh toán: không cấp link")
+    void unpaidCourse_cannotJoin() {
+        booking.setMembershipId(null);
+        booking.setCourseEnrollmentId(UUID.randomUUID());
+        when(jdbc.queryForObject(anyString(), anyMap(), eq(Boolean.class))).thenReturn(false);
+        assertCode(() -> service.join(booking.getId()), ScheduleResultCodes.ONLINE_COURSE_UNPAID);
+        verify(sync, never()).ensureJoinUrl(any());
     }
 
     @Test

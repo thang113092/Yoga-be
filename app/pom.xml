@@ -35,6 +35,10 @@
             <groupId>com.company.yoga</groupId>
             <artifactId>mod-schedule</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.company.yoga</groupId>
+            <artifactId>mod-content</artifactId>
+        </dependency>
 
         <!-- Spring Boot Starters -->
         <dependency>

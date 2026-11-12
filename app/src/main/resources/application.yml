@@ -89,6 +89,29 @@ yoga:
       use-registration: ${ZOOM_USE_REGISTRATION:true}
       # Email giả cho registrant (Zoom bắt buộc email; không gửi thư).
       registrant-email-domain: ${ZOOM_REGISTRANT_EMAIL_DOMAIN:students.anyen.invalid}
+  content:
+    # Số thiết bị xem video cùng lúc của một học viên.
+    max-devices: ${YOGA_CONTENT_MAX_DEVICES:2}
+    # URL trình phát có chữ ký hết hạn sau N phút.
+    playback-token-minutes: ${YOGA_CONTENT_PLAYBACK_TOKEN_MINUTES:120}
+    # Trình phát gửi tiến độ mỗi N giây; phiên xem hết hạn sau 3 nhịp không gửi.
+    heartbeat-seconds: ${YOGA_CONTENT_HEARTBEAT_SECONDS:60}
+    # Đổi phiên bản khi sửa nội dung cam kết an toàn.
+    waiver-version: ${YOGA_CONTENT_WAIVER_VERSION:2026-11}
+    sync-delay-ms: ${YOGA_CONTENT_SYNC_DELAY_MS:60000}
+    bunny:
+      api-base-url: ${BUNNY_API_BASE_URL:https://video.bunnycdn.com}
+      embed-base-url: ${BUNNY_EMBED_BASE_URL:https://iframe.mediadelivery.net}
+      tus-endpoint: ${BUNNY_TUS_ENDPOINT:https://video.bunnycdn.com/tusupload}
+      # Thư viện Bunny Stream. Để trống thì tắt thư viện video (quản lý nội dung vẫn tạo bản nháp được).
+      library-id: ${BUNNY_LIBRARY_ID:}
+      api-key: ${BUNNY_API_KEY:}
+      # Khóa "Embed view token authentication" của thư viện: ký URL trình phát.
+      token-key: ${BUNNY_TOKEN_KEY:}
+      # Pull zone của thư viện (vz-xxxx.b-cdn.net) để lấy ảnh thu nhỏ.
+      cdn-hostname: ${BUNNY_CDN_HOSTNAME:}
+      # Bí mật trong URL webhook: https://<backend>/api/v1/integration-webhooks/bunny?token=<bí mật>
+      webhook-secret: ${BUNNY_WEBHOOK_SECRET:}
 
 supabase:
   url: ${SUPABASE_URL:https://cagwkxiccmayrtajwdtc.supabase.co}

@@ -118,8 +118,22 @@ public class ClassScheduleService {
             throw new BusinessException(ScheduleResultCodes.ROOM_SCHEDULE_OVERLAP);
         }
 
-        // 3b. Lớp online: một tài khoản Zoom chỉ dạy được một lớp tại một thời điểm (kể cả ở cơ sở khác)
-        if ("VIRTUAL".equals(room.getRoomType()) && scheduleRepository.existsLiveHostOverlap(req.roomId(), req.startTime(), req.endTime())) {
+        // 3b. Lớp hybrid: phòng tập thường + phòng online cùng cơ sở phát trực tiếp, có số chỗ online riêng (V19)
+        int onlineSeats = 0;
+        if (req.liveRoomId() != null) {
+            var live = roomRepository.findById(req.liveRoomId())
+                    .orElseThrow(() -> new BusinessException(ScheduleResultCodes.HYBRID_LIVE_ROOM_INVALID));
+            if (classId != null || "VIRTUAL".equals(room.getRoomType()) || !"VIRTUAL".equals(live.getRoomType())
+                    || !req.branchId().equals(live.getBranchId()) || !Boolean.TRUE.equals(live.getIsActive())) {
+                throw new BusinessException(ScheduleResultCodes.HYBRID_LIVE_ROOM_INVALID);
+            }
+            onlineSeats = req.onlineCapacity() == null ? 0 : req.onlineCapacity();
+            if (onlineSeats < 1 || onlineSeats > live.getMaxCapacity()) throw new BusinessException(ScheduleResultCodes.HYBRID_ONLINE_SEATS_INVALID);
+        }
+
+        // 3c. Lớp online/hybrid: một tài khoản Zoom chỉ dạy được một lớp tại một thời điểm (kể cả ở cơ sở khác)
+        UUID streamRoom = req.liveRoomId() != null ? req.liveRoomId() : ("VIRTUAL".equals(room.getRoomType()) ? req.roomId() : null);
+        if (streamRoom != null && scheduleRepository.existsLiveHostOverlap(streamRoom, req.startTime(), req.endTime())) {
             throw new BusinessException(ScheduleResultCodes.LIVE_HOST_OVERLAP);
         }
 
@@ -139,6 +153,9 @@ public class ClassScheduleService {
         entity.setStartTime(req.startTime());
         entity.setEndTime(req.endTime());
         entity.setMaxCapacity(req.maxCapacity());
+        entity.setLiveRoomId(req.liveRoomId());
+        entity.setOnlineCapacity(onlineSeats);
+        entity.setRecordSession(Boolean.TRUE.equals(req.recordSession()) && streamRoom != null);
         entity.setStatus("SCHEDULED");
 
         ClassScheduleEntity saved = scheduleRepository.save(entity);
@@ -210,7 +227,10 @@ public class ClassScheduleService {
                 available,
                 s.getStatus(), s.getCourseClassId(), s.getSessionNumber(),
                 s.getDeliveryMode() != null ? s.getDeliveryMode()
-                        : roomRepository.findById(s.getRoomId()).filter(r -> "VIRTUAL".equals(r.getRoomType())).map(r -> "ONLINE").orElse("IN_PERSON")
+                        : s.getLiveRoomId() != null ? "HYBRID"
+                        : roomRepository.findById(s.getRoomId()).filter(r -> "VIRTUAL".equals(r.getRoomType())).map(r -> "ONLINE").orElse("IN_PERSON"),
+                s.getLiveRoomId(), s.getOnlineCapacity() == null ? 0 : s.getOnlineCapacity(),
+                s.getOnlineBookedCount() == null ? 0 : s.getOnlineBookedCount()
         );
     }
 }

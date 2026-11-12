@@ -45,3 +45,15 @@ services:
         sync: false
       - key: ZOOM_USE_REGISTRATION
         sync: false
+      - key: BUNNY_LIBRARY_ID
+        sync: false
+      - key: BUNNY_API_KEY
+        sync: false
+      - key: BUNNY_TOKEN_KEY
+        sync: false
+      - key: BUNNY_CDN_HOSTNAME
+        sync: false
+      - key: BUNNY_WEBHOOK_SECRET
+        sync: false
+      - key: YOGA_CONTENT_MAX_DEVICES
+        sync: false

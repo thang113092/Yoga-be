@@ -34,4 +34,8 @@ public class WaitlistEntity extends BaseAuditEntity {
 
     @Column(name = "converted_booking_id")
     private UUID convertedBookingId;
+
+    /** Seat type the student waits for (V19). */
+    @Column(name = "attendance_mode", updatable = false, length = 20)
+    private String attendanceMode;
 }

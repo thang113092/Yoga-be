@@ -177,6 +177,7 @@ public class PosOrderService {
         membership.setPlanId(plan.getId());
         membership.setRegisteredBranchId(req.branchId());
         membership.setIsAllBranches(Boolean.TRUE.equals(plan.getIsAllBranches()));
+        membership.setAccessScope(plan.getAccessScope());
         membership.setStartDate(today);
         membership.setEndDate(endDate);
         membership.setTotalSessions(plan.getTotalSessions());

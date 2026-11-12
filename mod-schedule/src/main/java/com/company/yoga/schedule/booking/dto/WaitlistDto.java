@@ -16,7 +16,11 @@ public final class WaitlistDto {
             UUID studentId,
 
             @NotNull(message = "Mã thẻ tập không được để trống")
-            UUID membershipId
+            UUID membershipId,
+
+            /** IN_PERSON or ONLINE seat of a hybrid class. */
+            @jakarta.validation.constraints.Pattern(regexp = "IN_PERSON|ONLINE", message = "Loại chỗ phải là IN_PERSON hoặc ONLINE")
+            String attendanceMode
     ) {}
 
     public record Resp(

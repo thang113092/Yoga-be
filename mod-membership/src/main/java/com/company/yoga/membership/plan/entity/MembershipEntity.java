@@ -35,6 +35,10 @@ public class MembershipEntity extends BaseAuditEntity {
     @Column(name = "is_all_branches", nullable = false, updatable = false)
     private Boolean isAllBranches;
 
+    /** Snapshot of the plan scope; the database copies it from the plan on insert (V14). */
+    @Column(name = "access_scope", nullable = false, updatable = false, length = 20)
+    private String accessScope = AccessScope.STUDIO;
+
     @Column(name = "start_date", nullable = false, updatable = false)
     private LocalDate startDate;
 

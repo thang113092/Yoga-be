@@ -42,6 +42,7 @@ public class CourseService {
     }
     private void reject(boolean condition,String message) { if(condition) throw new BusinessException(CommonErrorCode.CONFLICT,message); }
     private UUID uuid(Map<String,Object> row,String key) { return (UUID)row.get(key); }
+    private static String roomType(String deliveryMode) { return "ONLINE".equals(deliveryMode) ? "VIRTUAL" : "PHYSICAL"; }
 
     @Transactional(readOnly=true)
     public List<Map<String,Object>> courses() {
@@ -74,14 +75,19 @@ public class CourseService {
     }
 
     @Transactional(readOnly=true)
-    public List<Map<String,Object>> classes(UUID branchId) {
+    public List<Map<String,Object>> classes(UUID branchId) { return classes(branchId,null); }
+
+    @Transactional(readOnly=true)
+    public List<Map<String,Object>> classes(UUID branchId,String deliveryMode) {
         var actor=access.actor(); String role=access.role(actor);
         if(!Set.of("SUPER_ADMIN","STUDENT").contains(role)) {
             if(branchId==null) branchId=actor.getHomeBranchId();
             access.requireStaffBranch(branchId);
         }
         var a=new HashMap<String,Object>(); a.put("branch",branchId); a.put("student",role.equals("STUDENT"));
-        return dao.rows(CLASS_SELECT+" WHERE (CAST(:branch AS uuid) IS NULL OR c.branch_id=CAST(:branch AS uuid)) AND (:student=false OR c.status<>'DRAFT') ORDER BY c.created_at DESC",a);
+        a.put("mode",Set.of("IN_PERSON","ONLINE").contains(deliveryMode) ? deliveryMode : null);
+        return dao.rows(CLASS_SELECT+" WHERE (CAST(:branch AS uuid) IS NULL OR c.branch_id=CAST(:branch AS uuid)) AND (:student=false OR c.status<>'DRAFT')"
+            +" AND (CAST(:mode AS VARCHAR) IS NULL OR c.delivery_mode=:mode) ORDER BY c.created_at DESC",a);
     }
 
     @Transactional(readOnly=true)
@@ -91,7 +97,7 @@ public class CourseService {
         if("STUDENT".equals(access.role(actor))) reject("DRAFT".equals(c.get("status")),"Lớp chưa mở đăng ký.");
         else access.requireStaffBranch(uuid(c,"branchId"));
         c.put("sessions",dao.rows("""
-            SELECT s.id,s.session_number,s.session_title,s.start_time,s.end_time,s.status,s.room_id,s.instructor_id,
+            SELECT s.id,s.session_number,s.session_title,s.start_time,s.end_time,s.status,s.room_id,s.instructor_id,s.delivery_mode,
             r.name AS room_name,u.full_name AS instructor_name,s.booked_count,s.max_capacity,p.content AS planned_content,p.duration_minutes AS planned_duration_minutes
             FROM yoga.class_schedules s JOIN yoga.rooms r ON r.id=s.room_id JOIN yoga.users u ON u.id=s.instructor_id
             LEFT JOIN yoga.course_class_program_sessions p ON p.course_class_id=s.course_class_id AND p.session_number=s.session_number
@@ -110,8 +116,12 @@ public class CourseService {
         for(int i=0;i<r.sessions().size();i++) {
             var s=r.sessions().get(i); int n=i+1;
             if(!s.startTime().isAfter(Instant.now()) || !s.endTime().isAfter(s.startTime())) result.add(new CourseDto.Conflict(n,"Ngày giờ buổi học không hợp lệ."));
-            var args=Map.of("room",s.roomId(),"branch",r.branchId(),"capacity",r.maxCapacity(),"teacher",s.instructorId());
+            var args=Map.of("room",s.roomId(),"branch",r.branchId(),"capacity",r.maxCapacity(),"teacher",s.instructorId(),"type",roomType(r.mode()));
             if(dao.count("SELECT count(*) FROM yoga.rooms WHERE id=:room AND branch_id=:branch AND is_active AND max_capacity>=:capacity",args)==0) result.add(new CourseDto.Conflict(n,"Phòng không phù hợp chi nhánh hoặc sĩ số."));
+            else if(dao.count("SELECT count(*) FROM yoga.rooms WHERE id=:room AND room_type=:type",args)==0)
+                result.add(new CourseDto.Conflict(n,"ONLINE".equals(r.mode()) ? "Khóa học online chỉ dùng phòng online." : "Khóa học tại phòng không dùng phòng online."));
+            if("ONLINE".equals(r.mode()) && schedules.existsLiveHostOverlap(s.roomId(),s.startTime(),s.endTime()))
+                result.add(new CourseDto.Conflict(n,"Tài khoản Zoom của phòng online đã có lớp khác trong khoảng giờ này."));
             if(dao.count("SELECT count(*) FROM yoga.users u JOIN yoga.roles r ON r.id=u.role_id WHERE u.id=:teacher AND u.is_active AND r.code='INSTRUCTOR'",args)==0) result.add(new CourseDto.Conflict(n,"Huấn luyện viên không hợp lệ."));
             if(schedules.existsOverlappingRoomSchedule(s.roomId(),s.startTime(),s.endTime())) result.add(new CourseDto.Conflict(n,"Phòng đã có lớp trong khoảng giờ này."));
             if(schedules.existsOverlappingInstructorSchedule(s.instructorId(),s.startTime(),s.endTime())) result.add(new CourseDto.Conflict(n,"Huấn luyện viên đã có lịch trong khoảng giờ này."));
@@ -130,13 +140,14 @@ public class CourseService {
         reject(!preview(r).isEmpty(),"Lịch còn xung đột. Vui lòng kiểm tra lại các buổi.");
         var course=one("SELECT * FROM yoga.courses WHERE id=:id",Map.of("id",r.courseId()));
         UUID id=UUID.randomUUID();
-        dao.update("INSERT INTO yoga.course_classes(id,course_id,branch_id,code,name,planned_sessions,max_capacity,tuition_fee) VALUES(:id,:course,:branch,:code,:name,:total,:capacity,:fee)",
-            Map.of("id",id,"course",r.courseId(),"branch",r.branchId(),"code",r.code().trim(),"name",r.name().trim(),"total",r.sessions().size(),"capacity",r.maxCapacity(),"fee",r.tuitionFee()));
+        dao.update("INSERT INTO yoga.course_classes(id,course_id,branch_id,code,name,planned_sessions,max_capacity,tuition_fee,delivery_mode) VALUES(:id,:course,:branch,:code,:name,:total,:capacity,:fee,:mode)",
+            Map.of("id",id,"course",r.courseId(),"branch",r.branchId(),"code",r.code().trim(),"name",r.name().trim(),"total",r.sessions().size(),"capacity",r.maxCapacity(),"fee",r.tuitionFee(),"mode",r.mode()));
         dao.update("INSERT INTO yoga.course_class_program_sessions(course_class_id,session_number,title,content,duration_minutes) SELECT :class,session_number,title,content,duration_minutes FROM yoga.course_program_sessions WHERE course_id=:course",
             Map.of("class",id,"course",r.courseId()));
         var sorted=r.sessions().stream().sorted(Comparator.comparing(CourseDto.Session::startTime)).toList();
         for(int i=0;i<sorted.size();i++) { var s=sorted.get(i);
-            scheduleService.createCourseSchedule(new ScheduleDto.CreateReq(r.branchId(),s.roomId(),uuid(course,"classTypeId"),s.instructorId(),s.startTime(),s.endTime(),r.maxCapacity()),id,i+1,s.title());
+            scheduleService.createCourseSchedule(new ScheduleDto.CreateReq(r.branchId(),s.roomId(),uuid(course,"classTypeId"),s.instructorId(),s.startTime(),s.endTime(),r.maxCapacity(),
+                null,null,"ONLINE".equals(r.mode()) && Boolean.TRUE.equals(r.recordSessions())),id,i+1,s.title());
         }
         dao.update("UPDATE yoga.course_classes SET status='OPEN' WHERE id=:id",Map.of("id",id));
         return detail(id);
@@ -177,7 +188,7 @@ public class CourseService {
 
     private static final String ENROLL_SELECT="""
         SELECT e.*,i.order_id,o.status AS payment_status,o.total_amount,u.full_name AS student_name,u.phone AS student_phone,
-        c.name AS class_name,c.code AS class_code,c.branch_id,p.name AS course_name,c.planned_sessions,b.name AS branch_name,
+        c.name AS class_name,c.code AS class_code,c.branch_id,c.delivery_mode,p.name AS course_name,c.planned_sessions,b.name AS branch_name,
         (SELECT min(start_time) FROM yoga.class_schedules WHERE course_class_id=c.id AND status<>'CANCELLED') AS start_time,
         (SELECT max(end_time) FROM yoga.class_schedules WHERE course_class_id=c.id AND status<>'CANCELLED') AS end_time,
         (SELECT count(*) FROM yoga.attendance_records a JOIN yoga.class_schedules s ON s.id=a.schedule_id WHERE a.course_enrollment_id=e.id AND s.status<>'CANCELLED') AS attended_sessions,
@@ -194,7 +205,7 @@ public class CourseService {
         access.requireBooking(uuid(e,"studentId"),uuid(e,"branchId"));
         if("INSTRUCTOR".equals(access.role(access.actor()))) reject(dao.count("SELECT count(*) FROM yoga.class_schedules WHERE course_class_id=:id AND instructor_id=:actor",Map.of("id",uuid(e,"courseClassId"),"actor",access.actor().getId()))==0,"Chỉ xem học viên lớp được phân công.");
         e.put("sessions",dao.rows("""
-            SELECT s.id,s.session_number,s.session_title,s.start_time,s.end_time,s.status,r.name AS room_name,u.full_name AS instructor_name,
+            SELECT s.id,s.session_number,s.session_title,s.start_time,s.end_time,s.status,s.delivery_mode,r.name AS room_name,u.full_name AS instructor_name,
             b.id AS booking_id,b.booking_code,b.status AS booking_status,a.checked_in_at,
             CASE WHEN s.status='CANCELLED' OR b.status='CANCELLED' THEN 'CANCELLED' WHEN a.id IS NOT NULL THEN 'ATTENDED'
              WHEN s.end_time+INTERVAL '12 hours'<CURRENT_TIMESTAMP THEN 'ABSENT' ELSE 'UPCOMING' END AS attendance_state
@@ -222,6 +233,24 @@ public class CourseService {
         reject(!r.startTime().isAfter(Instant.now()) || !r.endTime().isAfter(r.startTime()),"Ngày giờ không hợp lệ.");
         var args=Map.of("id",sessionId,"room",r.roomId(),"teacher",r.instructorId(),"start",java.sql.Timestamp.from(r.startTime()),"end",java.sql.Timestamp.from(r.endTime()));
         reject(dao.count("SELECT count(*) FROM yoga.class_schedules WHERE id<>:id AND status<>'CANCELLED' AND (room_id=:room OR instructor_id=:teacher) AND start_time<:end AND end_time>:start",args)>0,"Trùng phòng hoặc huấn luyện viên.");
+        String mode=(String)c.get("deliveryMode");
+        var roomArgs=Map.of("room",r.roomId(),"branch",uuid(c,"branchId"),"capacity",c.get("maxCapacity"),"type",roomType(mode));
+        reject(dao.count("SELECT count(*) FROM yoga.rooms WHERE id=:room AND branch_id=:branch AND is_active AND max_capacity>=:capacity",roomArgs)==0,"Phòng không phù hợp chi nhánh hoặc sĩ số.");
+        reject(dao.count("SELECT count(*) FROM yoga.rooms WHERE id=:room AND room_type=:type",roomArgs)==0,
+            "ONLINE".equals(mode) ? "Khóa học online chỉ dùng phòng online." : "Khóa học tại phòng không dùng phòng online.");
+        if("ONLINE".equals(mode)) {
+            reject(dao.count("""
+                SELECT count(*) FROM yoga.class_schedules x JOIN yoga.rooms xr ON xr.id=x.room_id
+                WHERE x.id<>:id AND x.delivery_mode='ONLINE' AND x.status<>'CANCELLED' AND x.start_time<:end AND x.end_time>:start
+                  AND COALESCE(lower(xr.live_host_account),'')=(SELECT COALESCE(lower(live_host_account),'') FROM yoga.rooms WHERE id=:room)""",args)>0,
+                "Tài khoản Zoom của phòng online đã có lớp khác trong khoảng giờ này.");
+            reject(!r.roomId().equals(s.getRoomId()) && dao.count("""
+                SELECT count(*) FROM yoga.online_meetings m, yoga.rooms a, yoga.rooms b
+                WHERE m.schedule_id=:id AND m.provider_meeting_id IS NOT NULL AND m.status NOT IN ('CANCELLED','CANCEL_PENDING')
+                  AND a.id=:old AND b.id=:room AND COALESCE(lower(a.live_host_account),'')<>COALESCE(lower(b.live_host_account),'')""",
+                Map.of("id",sessionId,"old",s.getRoomId(),"room",r.roomId()))>0,
+                "Buổi học đã có phòng Zoom trên tài khoản khác; chỉ đổi sang phòng online cùng tài khoản Zoom.");
+        }
         s.setRoomId(r.roomId()); s.setInstructorId(r.instructorId()); s.setStartTime(r.startTime()); s.setEndTime(r.endTime()); s.setSessionTitle(r.title()); schedules.saveAndFlush(s);
     }
 }

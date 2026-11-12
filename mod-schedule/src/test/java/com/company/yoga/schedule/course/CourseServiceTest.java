@@ -61,6 +61,24 @@ class CourseServiceTest {
         Instant start=Instant.now().plusSeconds(86400);
         assertEquals(4,service.preview(request(List.of(session(start),session(start.plusSeconds(7200))))).size());
     }
+    CourseDto.CreateClass online(List<CourseDto.Session> sessions) {
+        return new CourseDto.CreateClass(course,branch,"C02","Yoga online",10,new BigDecimal("500000"),sessions,"ONLINE");
+    }
+    @Test void onlineCourseRejectsStudioRooms() {
+        validResources(); when(dao.count(contains("room_type"),anyMap())).thenReturn(0L);
+        var conflicts=service.preview(online(List.of(session(Instant.now().plusSeconds(86400)),session(Instant.now().plusSeconds(200000)))));
+        assertEquals(2,conflicts.size()); assertEquals("Khóa học online chỉ dùng phòng online.",conflicts.getFirst().message());
+    }
+    @Test void onlineCourseChecksTheZoomHost() {
+        validResources(); when(schedules.existsLiveHostOverlap(eq(room),any(),any())).thenReturn(true);
+        var conflicts=service.preview(online(List.of(session(Instant.now().plusSeconds(86400)),session(Instant.now().plusSeconds(200000)))));
+        assertEquals(2,conflicts.size()); assertTrue(conflicts.getFirst().message().contains("Zoom"));
+    }
+    @Test void studioCourseDoesNotCheckZoomHosts() {
+        validResources(); Instant start=Instant.now().plusSeconds(86400);
+        assertTrue(service.preview(request(List.of(session(start),session(start.plusSeconds(7200))))).isEmpty());
+        verify(schedules,never()).existsLiveHostOverlap(any(),any(),any());
+    }
     @Test void refusesPartialCourseBeforeAnyWrites() {
         when(dao.rows(anyString(),anyMap())).thenReturn(List.of(Map.of("totalSessions",12)));
         assertThrows(BusinessException.class,()->service.createClass(request(List.of(session(Instant.now().plusSeconds(86400))))));

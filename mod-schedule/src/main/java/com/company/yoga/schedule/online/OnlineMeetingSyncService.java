@@ -102,12 +102,12 @@ public class OnlineMeetingSyncService {
         transactions.executeWithoutResult(tx -> {
             List<Map<String, Object>> rows = jdbc.queryForList("""
                     SELECT m.status, m.provider_meeting_id, m.sync_attempts, s.start_time, s.end_time, s.status AS schedule_status,
-                           COALESCE(cc.name, ct.name) AS class_name, s.session_number, r.live_host_account, u.full_name AS instructor
+                           COALESCE(cc.name, ct.name) AS class_name, s.session_number, s.record_session, r.live_host_account, u.full_name AS instructor
                     FROM yoga.online_meetings m
                     JOIN yoga.class_schedules s ON s.id=m.schedule_id
                     JOIN yoga.class_types ct ON ct.id=s.class_type_id
                     LEFT JOIN yoga.course_classes cc ON cc.id=s.course_class_id
-                    JOIN yoga.rooms r ON r.id=s.room_id
+                    JOIN yoga.rooms r ON r.id=COALESCE(s.live_room_id,s.room_id)
                     JOIN yoga.users u ON u.id=s.instructor_id
                     WHERE m.id=:id AND m.status IN ('PENDING','UPDATE_PENDING','CANCEL_PENDING')
                       AND (:now OR m.next_attempt_at<=CURRENT_TIMESTAMP)
@@ -201,7 +201,7 @@ public class OnlineMeetingSyncService {
         Object session = m.get("session_number");
         String topic = m.get("class_name") + (session != null ? " – Buổi " + session : "") + " (HLV " + m.get("instructor") + ")";
         return new LiveMeetingProvider.MeetingSpec((String) m.get("live_host_account"), topic, start,
-                (int) Math.max(1, Duration.between(start, end).toMinutes()));
+                (int) Math.max(1, Duration.between(start, end).toMinutes()), Boolean.TRUE.equals(m.get("record_session")));
     }
 
     private static String firstName(String fullName) {

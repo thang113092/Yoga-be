@@ -3,6 +3,7 @@ package com.company.yoga.membership.plan.dto;
 import com.company.yoga.membership.plan.entity.MembershipPlanEntity;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,7 +33,9 @@ public final class MembershipPlanDto {
             Integer durationDays,
             @jakarta.validation.constraints.Positive
             Integer totalSessions,
-            Boolean isAllBranches
+            Boolean isAllBranches,
+            @Pattern(regexp = "(?i)STUDIO|ONLINE|HYBRID", message = "Phạm vi quyền phải là STUDIO, ONLINE hoặc HYBRID")
+            String accessScope
     ) {}
 
     public record UpdateReq(
@@ -46,7 +49,9 @@ public final class MembershipPlanDto {
             BigDecimal price,
 
             Boolean isAllBranches,
-            Boolean isActive
+            Boolean isActive,
+            @Pattern(regexp = "(?i)STUDIO|ONLINE|HYBRID", message = "Phạm vi quyền phải là STUDIO, ONLINE hoặc HYBRID")
+            String accessScope
     ) {}
 
     public record Resp(
@@ -59,6 +64,7 @@ public final class MembershipPlanDto {
             Integer durationDays,
             Integer totalSessions,
             Boolean isAllBranches,
+            String accessScope,
             Boolean isActive,
             Instant createdAt
     ) {
@@ -73,6 +79,7 @@ public final class MembershipPlanDto {
                     entity.getDurationDays(),
                     entity.getTotalSessions(),
                     entity.getIsAllBranches(),
+                    entity.getAccessScope(),
                     entity.getIsActive(),
                     entity.getCreatedAt()
             );

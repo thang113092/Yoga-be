@@ -7,6 +7,7 @@ import com.company.yoga.branch.facility.repository.RoomRepository;
 import com.company.yoga.common.exception.BusinessException;
 import com.company.yoga.identity.account.entity.UserEntity;
 import com.company.yoga.identity.account.repository.UserRepository;
+import com.company.yoga.membership.plan.entity.AccessScope;
 import com.company.yoga.membership.plan.entity.MembershipEntity;
 import com.company.yoga.membership.plan.repository.MembershipRepository;
 import com.company.yoga.schedule.ScheduleResultCodes;
@@ -67,8 +68,8 @@ public class WaitlistServiceImpl implements WaitlistService {
         }
 
         // 2. Kiểm tra nếu lớp chưa đầy thì khuyến khích đặt chỗ trực tiếp
-        int bookedCount = schedule.getBookedCount() != null ? schedule.getBookedCount() : 0;
-        if (bookedCount < schedule.getMaxCapacity()) {
+        String seat = Seats.resolve(schedule, req.attendanceMode());
+        if (Seats.hasFreeSeat(schedule, seat, schedule.getBookedCount(), schedule.getOnlineBookedCount())) {
             throw new BusinessException(ScheduleResultCodes.CLASS_NOT_FULL);
         }
 
@@ -95,7 +96,11 @@ public class WaitlistServiceImpl implements WaitlistService {
 
         // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép vào hàng chờ tại đúng chi nhánh đã đăng ký
         // Online classes accept passes of any branch (ONLINE_CLASS_PLAN.md, decision 3).
-        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode());
+        // Online passes are only for online classes (V14).
+        if (!AccessScope.allowsClass(membership.getAccessScope(), seat)) {
+            throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_ONLINE_ONLY);
+        }
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || Seats.ONLINE.equals(seat);
         if (!isAllBranches) {
             if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
                     || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
@@ -125,6 +130,7 @@ public class WaitlistServiceImpl implements WaitlistService {
         entity.setStudentId(studentId);
         entity.setMembershipId(membershipId);
         entity.setQueuePosition(nextPosition);
+        entity.setAttendanceMode(seat);
         entity.setStatus("WAITING");
 
         WaitlistEntity saved = waitlistRepository.save(entity);
@@ -183,7 +189,10 @@ public class WaitlistServiceImpl implements WaitlistService {
 
         // Native scalar reads the trigger-updated value, bypassing the entity cache.
         int bookedCount = scheduleRepository.currentBookedCount(scheduleId);
-        if (bookedCount >= schedule.getMaxCapacity()) {
+        Integer onlineBooked = scheduleRepository.currentOnlineBookedCount(scheduleId);
+        boolean studioFree = Seats.hasFreeSeat(schedule, Seats.IN_PERSON, bookedCount, onlineBooked);
+        boolean onlineFree = "HYBRID".equals(schedule.getDeliveryMode()) && Seats.hasFreeSeat(schedule, Seats.ONLINE, bookedCount, onlineBooked);
+        if (!studioFree && !onlineFree) {
             return Optional.empty();
         }
 
@@ -199,12 +208,16 @@ public class WaitlistServiceImpl implements WaitlistService {
             }
 
             MembershipEntity mb = mbOpt.get();
+            String seat = candidate.getAttendanceMode() != null ? candidate.getAttendanceMode() : Seats.resolve(schedule, null);
+            // A hybrid class may have a free seat of the other type only: this candidate keeps waiting.
+            if (Seats.ONLINE.equals(seat) && "HYBRID".equals(schedule.getDeliveryMode()) ? !onlineFree : !studioFree) continue;
             LocalDate scheduleDate = schedule.getStartTime().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDate();
             boolean isValid = "ACTIVE".equalsIgnoreCase(mb.getStatus())
                     && (mb.getRemainingSessions() == null || mb.getRemainingSessions() > 0)
                     && (mb.getStartDate() == null || !scheduleDate.isBefore(mb.getStartDate()))
                     && (mb.getEndDate() == null || !scheduleDate.isAfter(mb.getEndDate()))
-                    && (Boolean.TRUE.equals(mb.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode()) || Objects.equals(mb.getRegisteredBranchId(), schedule.getBranchId()))
+                    && (Boolean.TRUE.equals(mb.getIsAllBranches()) || Seats.ONLINE.equals(seat) || Objects.equals(mb.getRegisteredBranchId(), schedule.getBranchId()))
+                    && AccessScope.allowsClass(mb.getAccessScope(), seat)
                     && Objects.equals(mb.getStudentId(), candidate.getStudentId())
                     && userRepository.findById(candidate.getStudentId()).map(u -> Boolean.TRUE.equals(u.getIsActive())).orElse(false)
                     && bookingRepository.activeBookingCount(scheduleId, candidate.getStudentId()) == 0
@@ -224,8 +237,11 @@ public class WaitlistServiceImpl implements WaitlistService {
             newBooking.setScheduleId(scheduleId);
             newBooking.setStudentId(candidate.getStudentId());
             newBooking.setMembershipId(candidate.getMembershipId());
-            var occupied = bookingRepository.occupiedMats(scheduleId);
-            newBooking.setMatNumber(java.util.stream.IntStream.rangeClosed(1, schedule.getMaxCapacity()).filter(n -> !occupied.contains(n)).boxed().findFirst().orElse(null));
+            newBooking.setAttendanceMode(seat);
+            if (Seats.usesMat(schedule, seat)) {
+                var occupied = bookingRepository.occupiedMats(scheduleId);
+                newBooking.setMatNumber(java.util.stream.IntStream.rangeClosed(1, schedule.getMaxCapacity()).filter(n -> !occupied.contains(n)).boxed().findFirst().orElse(null));
+            }
             newBooking.setStatus("CONFIRMED");
             newBooking.setBookingTime(Instant.now());
             BookingEntity savedBooking = bookingRepository.saveAndFlush(newBooking);

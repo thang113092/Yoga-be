@@ -59,7 +59,23 @@ public class ClassScheduleEntity extends BaseAuditEntity {
     @Column(name = "version", nullable = false, insertable = false, updatable = false)
     private Long version;
 
-    /** Derived by the database from the room: ONLINE for virtual rooms. */
+    /** Record the online/hybrid stream to the Zoom cloud and import it as a draft video (V20). */
+    @Column(name = "record_session", nullable = false)
+    private Boolean recordSession = false;
+
+    /** Hybrid class: online room of the same branch whose Zoom account streams the class (V19). Fixed once created. */
+    @Column(name = "live_room_id", updatable = false)
+    private java.util.UUID liveRoomId;
+
+    /** Hybrid class: online seats; studio seats stay max_capacity. */
+    @Column(name = "online_capacity", nullable = false)
+    private Integer onlineCapacity = 0;
+
+    /** Managed by trigger maintain_booking_balances. */
+    @Column(name = "online_booked_count", nullable = false, insertable = false, updatable = false)
+    private Integer onlineBookedCount;
+
+    /** Derived by the database: ONLINE for virtual rooms, HYBRID for a studio room with a live room (V19). */
     @Column(name = "delivery_mode", nullable = false, insertable = false, updatable = false, length = 20)
     private String deliveryMode;
 }

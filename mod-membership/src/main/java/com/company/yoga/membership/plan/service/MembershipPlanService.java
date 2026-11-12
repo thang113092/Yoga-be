@@ -3,6 +3,7 @@ package com.company.yoga.membership.plan.service;
 import com.company.yoga.common.exception.BusinessException;
 import com.company.yoga.membership.MembershipResultCodes;
 import com.company.yoga.membership.plan.dto.MembershipPlanDto;
+import com.company.yoga.membership.plan.entity.AccessScope;
 import com.company.yoga.membership.plan.entity.MembershipPlanEntity;
 import com.company.yoga.membership.plan.repository.MembershipPlanRepository;
 import java.util.List;
@@ -58,6 +59,7 @@ public class MembershipPlanService {
         entity.setDurationDays(req.durationDays());
         entity.setTotalSessions(req.totalSessions());
         entity.setIsAllBranches(Boolean.TRUE.equals(req.isAllBranches()));
+        entity.setAccessScope(AccessScope.normalize(req.accessScope()));
         entity.setIsActive(true);
 
         repository.save(entity);
@@ -75,6 +77,10 @@ public class MembershipPlanService {
         entity.setPrice(req.price());
         if (req.isAllBranches() != null) {
             entity.setIsAllBranches(req.isAllBranches());
+        }
+        if (req.accessScope() != null && !req.accessScope().isBlank()) {
+            // Only future sales change: sold passes keep their own snapshot of the scope.
+            entity.setAccessScope(AccessScope.normalize(req.accessScope()));
         }
         if (req.isActive() != null) {
             entity.setIsActive(req.isActive());

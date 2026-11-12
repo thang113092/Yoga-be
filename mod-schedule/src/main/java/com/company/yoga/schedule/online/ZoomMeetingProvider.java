@@ -109,7 +109,8 @@ public class ZoomMeetingProvider implements LiveMeetingProvider {
         settings.put("mute_upon_entry", true);
         settings.put("participant_video", false);
         settings.put("host_video", true);
-        settings.put("auto_recording", "none");
+        // Cloud recording only for classes that staff chose to record (V20); they become draft videos.
+        settings.put("auto_recording", spec.record() ? "cloud" : "none");
         settings.put("meeting_authentication", false);
         body.put("settings", settings);
         JsonNode created = call(() -> api.post().uri("/users/{host}/meetings", host).headers(h -> h.setBearerAuth(token()))
@@ -175,6 +176,11 @@ public class ZoomMeetingProvider implements LiveMeetingProvider {
         body.put("duration", Math.max(1, spec.durationMinutes()));
         body.put("timezone", "Asia/Ho_Chi_Minh");
         return body;
+    }
+
+    @Override
+    public String recordingDownloadToken() {
+        return token();
     }
 
     private synchronized String token() {

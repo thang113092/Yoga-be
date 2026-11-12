@@ -40,6 +40,10 @@ public class MembershipPlanEntity extends BaseAuditEntity {
     @Column(name = "is_all_branches", nullable = false)
     private Boolean isAllBranches = false;
 
+    /** STUDIO, ONLINE or HYBRID (V14); copied onto each pass when it is sold. */
+    @Column(name = "access_scope", nullable = false, length = 20)
+    private String accessScope = AccessScope.STUDIO;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 }

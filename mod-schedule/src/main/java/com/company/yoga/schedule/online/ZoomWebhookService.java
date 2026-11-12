@@ -28,6 +28,7 @@ public class ZoomWebhookService {
     private final ObjectMapper mapper;
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate transactions;
+    private final LiveRecordingService recordings;
 
     public Outcome handle(String timestamp, String signature, String body) {
         if (!verifier.verify(timestamp, signature, body)) return new Rejected();
@@ -48,7 +49,8 @@ public class ZoomWebhookService {
         if (stored.isEmpty()) return new Accepted();   // redelivery of an event already handled
         UUID eventId = stored.get();
         try {
-            String result = transactions.execute(tx -> apply(event, meetingId) > 0 ? "PROCESSED" : "IGNORED");
+            String result = transactions.execute(tx -> ("recording.completed".equals(event) ? recordings.receive(root) : apply(event, meetingId)) > 0
+                    ? "PROCESSED" : "IGNORED");
             finish(eventId, result, null);
         } catch (RuntimeException ex) {
             log.warn("Zoom event {} could not be applied: {}", reference, ex.getMessage());

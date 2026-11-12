@@ -7,6 +7,7 @@ import com.company.yoga.branch.facility.repository.RoomRepository;
 import com.company.yoga.common.exception.BusinessException;
 import com.company.yoga.identity.account.entity.UserEntity;
 import com.company.yoga.identity.account.repository.UserRepository;
+import com.company.yoga.membership.plan.entity.AccessScope;
 import com.company.yoga.membership.plan.entity.MembershipEntity;
 import com.company.yoga.membership.plan.repository.MembershipRepository;
 import com.company.yoga.schedule.ScheduleResultCodes;
@@ -59,8 +60,8 @@ public class BookingService {
         if (schedule.getInstructorId() != null && userRepository.findById(schedule.getInstructorId()).filter(u -> Boolean.TRUE.equals(u.getIsActive())).isEmpty())
             throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Ca học cần phân công huấn luyện viên đang hoạt động.");
         if (!"SCHEDULED".equals(schedule.getStatus()) || !Instant.now().isBefore(schedule.getStartTime())) throw new BusinessException(ScheduleResultCodes.CANCELLATION_WINDOW_CLOSED);
-        int currentBooked = schedule.getBookedCount() != null ? schedule.getBookedCount() : 0;
-        if (currentBooked >= schedule.getMaxCapacity()) {
+        String seat = Seats.resolve(schedule, req.attendanceMode());
+        if (!Seats.hasFreeSeat(schedule, seat, schedule.getBookedCount(), schedule.getOnlineBookedCount())) {
             throw new BusinessException(ScheduleResultCodes.CLASS_FULL);
         }
 
@@ -82,7 +83,12 @@ public class BookingService {
 
         // Kiểm tra chi nhánh áp dụng: Thẻ đơn cơ sở chỉ được phép đặt tại đúng chi nhánh đã đăng ký
         // Online classes accept passes of any branch (ONLINE_CLASS_PLAN.md, decision 3).
-        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || "ONLINE".equals(schedule.getDeliveryMode());
+        // Online passes are only for online classes (V14).
+        // Hybrid classes: the rules follow the seat (V19).
+        if (!AccessScope.allowsClass(membership.getAccessScope(), seat)) {
+            throw new BusinessException(ScheduleResultCodes.MEMBERSHIP_ONLINE_ONLY);
+        }
+        boolean isAllBranches = Boolean.TRUE.equals(membership.getIsAllBranches()) || Seats.ONLINE.equals(seat);
         if (!isAllBranches) {
             if (schedule.getBranchId() == null || membership.getRegisteredBranchId() == null
                     || !Objects.equals(schedule.getBranchId(), membership.getRegisteredBranchId())) {
@@ -113,11 +119,17 @@ public class BookingService {
         booking.setScheduleId(scheduleId);
         booking.setStudentId(studentId);
         booking.setMembershipId(membershipId);
-        var occupied = bookingRepository.occupiedMats(scheduleId);
-        Integer mat = req.matNumber();
-        if (mat == null) mat = java.util.stream.IntStream.rangeClosed(1, schedule.getMaxCapacity()).filter(n -> !occupied.contains(n)).boxed().findFirst().orElse(null);
-        if (mat == null || mat > schedule.getMaxCapacity() || mat <= 0 || occupied.contains(mat)) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Mat is unavailable");
-        booking.setMatNumber(mat);
+        booking.setAttendanceMode(seat);
+        if (!Seats.usesMat(schedule, seat)) {
+            // Online seats of a hybrid class have no mat in the studio.
+            booking.setMatNumber(null);
+        } else {
+            var occupied = bookingRepository.occupiedMats(scheduleId);
+            Integer mat = req.matNumber();
+            if (mat == null) mat = java.util.stream.IntStream.rangeClosed(1, schedule.getMaxCapacity()).filter(n -> !occupied.contains(n)).boxed().findFirst().orElse(null);
+            if (mat == null || mat > schedule.getMaxCapacity() || mat <= 0 || occupied.contains(mat)) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, "Mat is unavailable");
+            booking.setMatNumber(mat);
+        }
         booking.setStatus("CONFIRMED");
         booking.setBookingTime(Instant.now());
 

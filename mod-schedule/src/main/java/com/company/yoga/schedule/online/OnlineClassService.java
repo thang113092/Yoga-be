@@ -65,9 +65,17 @@ public class OnlineClassService {
         if (!booking.getStudentId().equals(actor.getId())) throw new BusinessException(CommonErrorCode.FORBIDDEN);
         ClassScheduleEntity schedule = schedules.findById(booking.getScheduleId())
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
-        if (!ONLINE.equals(schedule.getDeliveryMode())) throw new BusinessException(ScheduleResultCodes.NOT_ONLINE_CLASS);
+        // Online classes, and online seats of hybrid classes (V19).
+        boolean onlineSeat = ONLINE.equals(schedule.getDeliveryMode())
+                || ("HYBRID".equals(schedule.getDeliveryMode()) && ONLINE.equals(booking.getAttendanceMode()));
+        if (!onlineSeat) throw new BusinessException(ScheduleResultCodes.NOT_ONLINE_CLASS);
         if ("CANCELLED".equals(schedule.getStatus()) || !Set.of("CONFIRMED", "ATTENDED").contains(booking.getStatus())) {
             throw new BusinessException(ScheduleResultCodes.BOOKING_NOT_CONFIRMED);
+        }
+        if (booking.getCourseEnrollmentId() != null && !Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM yoga.course_enrollments WHERE id=:e AND status='ACTIVE')",
+                Map.of("e", booking.getCourseEnrollmentId()), Boolean.class))) {
+            throw new BusinessException(ScheduleResultCodes.ONLINE_COURSE_UNPAID);
         }
         Instant now = Instant.now();
         if (now.isBefore(schedule.getStartTime().minus(joinLead))) throw new BusinessException(ScheduleResultCodes.ONLINE_JOIN_NOT_OPEN);
@@ -155,7 +163,9 @@ public class OnlineClassService {
     private ClassScheduleEntity onlineSchedule(UUID scheduleId) {
         ClassScheduleEntity schedule = schedules.findById(scheduleId)
                 .orElseThrow(() -> new BusinessException(ScheduleResultCodes.SCHEDULE_NOT_FOUND));
-        if (!ONLINE.equals(schedule.getDeliveryMode())) throw new BusinessException(ScheduleResultCodes.NOT_ONLINE_CLASS);
+        if (!ONLINE.equals(schedule.getDeliveryMode()) && !"HYBRID".equals(schedule.getDeliveryMode())) {
+            throw new BusinessException(ScheduleResultCodes.NOT_ONLINE_CLASS);
+        }
         return schedule;
     }
 

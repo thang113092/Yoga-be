@@ -30,7 +30,16 @@ public interface LiveMeetingProvider {
     /** Host links expire, so they are fetched when needed and never stored. */
     String hostStartUrl(String meetingId);
 
-    record MeetingSpec(String hostAccount, String topic, Instant start, int durationMinutes) {}
+    /** Bearer token that may download this account's cloud recordings (fallback when a webhook carries none). */
+    default String recordingDownloadToken() {
+        throw new ProviderException("Recording download is not supported", true);
+    }
+
+    record MeetingSpec(String hostAccount, String topic, Instant start, int durationMinutes, boolean record) {
+        public MeetingSpec(String hostAccount, String topic, Instant start, int durationMinutes) {
+            this(hostAccount, topic, start, durationMinutes, false);
+        }
+    }
 
     record RegistrantSpec(String email, String firstName, String lastName) {}
 

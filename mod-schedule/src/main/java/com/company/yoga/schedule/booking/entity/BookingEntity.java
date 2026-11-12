@@ -43,6 +43,10 @@ public class BookingEntity extends BaseAuditEntity {
     @Column(name = "mat_number", updatable = false)
     private Integer matNumber;
 
+    /** IN_PERSON or ONLINE seat; chosen for hybrid classes, derived by the database otherwise (V19). */
+    @Column(name = "attendance_mode", updatable = false, length = 20)
+    private String attendanceMode;
+
     @Column(name = "cancelled_at", insertable = false, updatable = false)
     private Instant cancelledAt;
 

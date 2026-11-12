@@ -25,13 +25,16 @@ public final class ScheduleDto {
             String status,
             UUID courseClassId,
             Integer sessionNumber,
-            String deliveryMode
+            String deliveryMode,
+            UUID liveRoomId,
+            Integer onlineCapacity,
+            Integer onlineBookedCount
     ) {
         public Resp(UUID id, UUID branchId, String branchName, UUID roomId, UUID instructorId,
                     String className, String instructorName, String roomName, Instant startTime, Instant endTime,
                     Integer maxCapacity, Integer bookedCount, Integer availableSlots, String status) {
             this(id,branchId,branchName,roomId,instructorId,className,instructorName,roomName,startTime,endTime,
-                    maxCapacity,bookedCount,availableSlots,status,null,null,"IN_PERSON");
+                    maxCapacity,bookedCount,availableSlots,status,null,null,"IN_PERSON",null,0,0);
         }
     }
 
@@ -55,6 +58,24 @@ public final class ScheduleDto {
             Instant endTime,
 
             @NotNull(message = "Sĩ số tối đa không được để trống")
-            Integer maxCapacity
-    ) {}
+            Integer maxCapacity,
+
+            /** Hybrid class: online room of the branch that streams it. Null for studio-only and online classes. */
+            UUID liveRoomId,
+
+            /** Hybrid class: number of online seats. */
+            @jakarta.validation.constraints.Min(0)
+            Integer onlineCapacity,
+
+            /** Online/hybrid classes: record to the Zoom cloud and import into the video library as a draft. */
+            Boolean recordSession
+    ) {
+        public CreateReq(UUID branchId, UUID roomId, UUID classTypeId, UUID instructorId, Instant startTime, Instant endTime, Integer maxCapacity) {
+            this(branchId, roomId, classTypeId, instructorId, startTime, endTime, maxCapacity, null, null, null);
+        }
+        public CreateReq(UUID branchId, UUID roomId, UUID classTypeId, UUID instructorId, Instant startTime, Instant endTime, Integer maxCapacity,
+                         UUID liveRoomId, Integer onlineCapacity) {
+            this(branchId, roomId, classTypeId, instructorId, startTime, endTime, maxCapacity, liveRoomId, onlineCapacity, null);
+        }
+    }
 }

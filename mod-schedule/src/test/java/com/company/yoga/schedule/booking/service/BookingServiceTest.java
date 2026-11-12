@@ -232,6 +232,94 @@ class BookingServiceTest {
         org.mockito.Mockito.verify(bookingRepository, org.mockito.Mockito.never()).save(any(BookingEntity.class));
     }
 
+    private void hybrid(int onlineCapacity, int onlineBooked) {
+        ReflectionTestUtils.setField(schedule, "deliveryMode", "HYBRID");
+        schedule.setLiveRoomId(UUID.randomUUID());
+        schedule.setOnlineCapacity(onlineCapacity);
+        ReflectionTestUtils.setField(schedule, "onlineBookedCount", onlineBooked);
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+    }
+
+    @Test
+    @DisplayName("Lớp hybrid: phải chọn học tại phòng hoặc online")
+    void hybridRequiresSeatChoice() {
+        hybrid(5, 0);
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> bookingService.createBooking(new BookingDto.CreateReq(scheduleId, studentId, membershipId, null)));
+        assertEquals(ScheduleResultCodes.HYBRID_SEAT_REQUIRED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Lớp hybrid: hết chỗ online thì báo kín dù còn chỗ tại phòng")
+    void hybridOnlineSeatsFull() {
+        hybrid(2, 2);
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> bookingService.createBooking(new BookingDto.CreateReq(scheduleId, studentId, membershipId, null, "ONLINE")));
+        assertEquals(ScheduleResultCodes.CLASS_FULL, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Lớp hybrid: chỗ online của cơ sở khác không cần thẻ toàn chuỗi và không có số thảm")
+    void hybridOnlineSeatOtherBranch() {
+        hybrid(2, 0);
+        schedule.setBranchId(UUID.randomUUID());
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED")).thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime())).thenReturn(false);
+        when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
+        when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> {
+            BookingEntity b = invocation.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        BookingDto.Resp resp = bookingService.createBooking(new BookingDto.CreateReq(scheduleId, studentId, membershipId, null, "ONLINE"));
+        assertEquals("CONFIRMED", resp.status());
+        org.junit.jupiter.api.Assertions.assertNull(resp.matNumber());
+    }
+
+    @Test
+    @DisplayName("Thẻ online không đặt được lớp tại phòng")
+    void testCreateBooking_ThrowsOnlineOnly_WhenOnlinePassBooksStudioClass() {
+        ReflectionTestUtils.setField(schedule, "deliveryMode", "IN_PERSON");
+        membership.setAccessScope("ONLINE");
+
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
+                .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(false);
+        when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
+
+        BookingDto.CreateReq req = new BookingDto.CreateReq(scheduleId, studentId, membershipId, null);
+        BusinessException ex = assertThrows(BusinessException.class, () -> bookingService.createBooking(req));
+
+        assertEquals(ScheduleResultCodes.MEMBERSHIP_ONLINE_ONLY, ex.getErrorCode());
+        org.mockito.Mockito.verify(bookingRepository, org.mockito.Mockito.never()).save(any(BookingEntity.class));
+    }
+
+    @Test
+    @DisplayName("Thẻ online đơn cơ sở đặt được lớp online của cơ sở khác")
+    void testCreateBooking_Success_WhenOnlinePassBooksOnlineClass() {
+        schedule.setBranchId(UUID.randomUUID());
+        ReflectionTestUtils.setField(schedule, "deliveryMode", "ONLINE");
+        membership.setAccessScope("ONLINE");
+
+        when(scheduleRepository.findByIdWithLock(scheduleId)).thenReturn(Optional.of(schedule));
+        when(bookingRepository.findByScheduleIdAndStudentIdAndStatus(scheduleId, studentId, "CONFIRMED"))
+                .thenReturn(Optional.empty());
+        when(bookingRepository.existsStudentTimeConflict(studentId, scheduleId, schedule.getStartTime(), schedule.getEndTime()))
+                .thenReturn(false);
+        when(membershipRepository.findById(membershipId)).thenReturn(Optional.of(membership));
+        when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> {
+            BookingEntity b = invocation.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+
+        BookingDto.Resp resp = bookingService.createBooking(new BookingDto.CreateReq(scheduleId, studentId, membershipId, null));
+
+        assertEquals("CONFIRMED", resp.status());
+    }
+
     @Test
     @DisplayName("Cho phép đặt chỗ ở bất kỳ cơ sở nào khi dùng thẻ toàn chuỗi (isAllBranches = true)")
     void testCreateBooking_Success_WhenAllBranchesMembership() {

@@ -19,8 +19,16 @@ public final class BookingDto {
             UUID membershipId,
 
             @jakarta.validation.constraints.Positive
-            Integer matNumber
-    ) {}
+            Integer matNumber,
+
+            /** IN_PERSON or ONLINE; required for hybrid classes, ignored otherwise. */
+            @jakarta.validation.constraints.Pattern(regexp = "IN_PERSON|ONLINE", message = "Loại chỗ phải là IN_PERSON hoặc ONLINE")
+            String attendanceMode
+    ) {
+        public CreateReq(UUID scheduleId, UUID studentId, UUID membershipId, Integer matNumber) {
+            this(scheduleId, studentId, membershipId, matNumber, null);
+        }
+    }
 
     public record CancelReq(
             String reason
@@ -51,7 +59,8 @@ public final class BookingDto {
             String status,
             Instant bookingTime,
             boolean canCancel,
-            String deliveryMode
+            String deliveryMode,
+            String attendanceMode
     ) {}
 
     public record AttendeeResp(

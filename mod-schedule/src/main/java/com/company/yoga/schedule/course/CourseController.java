@@ -13,7 +13,7 @@ public class CourseController {
     private final CourseService service;
     @GetMapping("/courses") public ApiResponse<?> courses() { return ApiResponse.success(service.courses()); }
     @PostMapping("/courses") public ApiResponse<?> createCourse(@Valid @RequestBody CourseDto.CreateCourse r) { return ApiResponse.success(service.createCourse(r)); }
-    @GetMapping("/course-classes") public ApiResponse<?> classes(@RequestParam(required=false) UUID branchId) { return ApiResponse.success(service.classes(branchId)); }
+    @GetMapping("/course-classes") public ApiResponse<?> classes(@RequestParam(required=false) UUID branchId,@RequestParam(required=false) String deliveryMode) { return ApiResponse.success(service.classes(branchId,deliveryMode)); }
     @PostMapping("/course-classes/preview") public ApiResponse<?> preview(@Valid @RequestBody CourseDto.CreateClass r) { return ApiResponse.success(service.preview(r)); }
     @PostMapping("/course-classes") public ApiResponse<?> createClass(@Valid @RequestBody CourseDto.CreateClass r) { return ApiResponse.success(service.createClass(r)); }
     @GetMapping("/course-classes/{id}") public ApiResponse<?> detail(@PathVariable UUID id) { return ApiResponse.success(service.detail(id)); }

@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PosOrderService {
 
+    static final String SELF_SERVICE_NOTE = "Học viên mua online";
+
     private final AccessPolicy accessPolicy;
     private final jakarta.persistence.EntityManager entityManager;
     private final MembershipPlanRepository planRepository;
@@ -44,6 +46,44 @@ public class PosOrderService {
     public PosOrderDto.OrderResp createMembershipOrder(PosOrderDto.CreateOrderReq req, UUID key) {
         UUID cashierId = accessPolicy.requireStaffBranch(req.branchId());
         accessPolicy.requireBooking(req.studentId(), req.branchId());
+        return createOrder(req, key, cashierId);
+    }
+
+    /** A student buying for themselves online: they are both customer and order taker, and cannot adjust the price. */
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('STUDENT')")
+    public PosOrderDto.OrderResp createSelfServiceOrder(PosOrderDto.SelfServiceOrderReq req, UUID key) {
+        UUID me = requireSelfService(req.branchId());
+        return createOrder(new PosOrderDto.CreateOrderReq(req.branchId(), me, req.planId(), me, SELF_SERVICE_NOTE,
+                req.replacesMembershipId(), req.expectedCredit(), req.expectedTotal(), null, null), key, me);
+    }
+
+    @Transactional(readOnly = true)
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('STUDENT')")
+    public PosOrderDto.CheckoutQuote getSelfServiceQuote(UUID planId, UUID branchId) {
+        return quote(requireSelfService(branchId), planId, branchId);
+    }
+
+    /** Students may cancel their own unpaid order; an open online payment must be closed first. */
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('STUDENT')")
+    public void cancelOwnPendingOrder(UUID orderId) {
+        var caller = accessPolicy.actor();
+        var order = orderRepository.findById(orderId)
+                .filter(o -> java.util.Objects.equals(o.getCustomerId(), caller.getId()) && "STUDENT".equals(accessPolicy.role(caller)))
+                .orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
+        cancel(order.getId());
+    }
+
+    private UUID requireSelfService(UUID branchId) {
+        var caller = accessPolicy.actor();
+        if (!"STUDENT".equals(accessPolicy.role(caller))) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.FORBIDDEN);
+        if (branchId == null || branchRepository.findById(branchId).filter(b -> Boolean.TRUE.equals(b.getIsActive())).isEmpty())
+            throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.BAD_REQUEST, "Cơ sở không hợp lệ hoặc đã ngừng hoạt động.");
+        return caller.getId();
+    }
+
+    private PosOrderDto.OrderResp createOrder(PosOrderDto.CreateOrderReq req, UUID key, UUID cashierId) {
         entityManager.createNativeQuery("SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(CAST(:key AS text), 1))")
                 .setParameter("key", key.toString()).getResultList();
         var existing = orderRepository.findByOrderCode("ORD-" + key);
@@ -71,7 +111,7 @@ public class PosOrderService {
             throw new BusinessException(MembershipResultCodes.PLAN_NOT_FOUND);
         }
 
-        var quote = getCheckoutQuote(req.studentId(), req.planId(), req.branchId());
+        var quote = quote(req.studentId(), req.planId(), req.branchId());
         UUID currentId = quote.currentMembership() == null ? null : quote.currentMembership().id();
         if (quote.issue() != null) throw new BusinessException(com.company.yoga.common.api.CommonErrorCode.CONFLICT, quote.issue());
         BigDecimal credit = quote.credit();
@@ -174,6 +214,10 @@ public class PosOrderService {
     public PosOrderDto.CheckoutQuote getCheckoutQuote(UUID studentId, UUID planId, UUID branchId) {
         accessPolicy.requireStaffBranch(branchId);
         accessPolicy.requireBooking(studentId, branchId);
+        return quote(studentId, planId, branchId);
+    }
+
+    private PosOrderDto.CheckoutQuote quote(UUID studentId, UUID planId, UUID branchId) {
         var plan = planRepository.findById(planId).orElseThrow(() -> new BusinessException(MembershipResultCodes.PLAN_NOT_FOUND));
         Object[] row;
         try {
@@ -197,10 +241,14 @@ public class PosOrderService {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     public void cancelPendingOrder(UUID orderId) {
-        boolean course = orderItemRepository.findByOrderId(orderId).stream().anyMatch(i -> "COURSE_CLASS".equals(i.getItemType()));
-        var order = (course ? orderRepository.findById(orderId) : orderRepository.findByIdWithLock(orderId))
-                .orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
+        var order = orderRepository.findById(orderId).orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
         accessPolicy.requireStaffBranch(order.getBranchId());
+        cancel(orderId);
+    }
+
+    private void cancel(UUID orderId) {
+        boolean course = orderItemRepository.findByOrderId(orderId).stream().anyMatch(i -> "COURSE_CLASS".equals(i.getItemType()));
+        if (!course) orderRepository.findByIdWithLock(orderId).orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
         entityManager.createNativeQuery(course ? "SELECT 1 FROM yoga.cancel_pending_course_order(:id)" :
                 "SELECT 1 FROM yoga.cancel_pending_membership_order(:id)").setParameter("id", orderId).getSingleResult();
     }

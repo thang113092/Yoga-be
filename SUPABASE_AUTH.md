@@ -20,7 +20,7 @@ Tài khoản mới đăng ký là STUDENT. Sau khi chọn tài khoản quản tr
 
 DB endpoint và password đã khôi phục ở application-local.properties; không thay đổi sang localhost/direct connection. Backend sử dụng SUPABASE_URL và SUPABASE_PUBLISHABLE_KEY (public key), mặc định theo project đã có trong frontend. SUPABASE_SERVICE_ROLE_KEY là secret backend, cần điền khi tạo nhân sự qua Admin API; không đặt trong frontend, không gửi qua chat. JWT_SECRET không còn được dùng để xác thực.
 
-Dashboard Authentication → URL Configuration: thêm origin thực tế, /auth/login và /auth/reset-password vào Redirect URLs, ví dụ http://localhost:4200/auth/login và http://localhost:4200/auth/reset-password. Bật provider Email và cấu hình confirmation/password policy theo môi trường. Không tắt xác nhận email để lách lỗi cấu hình.
+Dashboard Authentication → URL Configuration: thêm origin thực tế, /auth/login và /auth/reset-password vào Redirect URLs, ví dụ http://localhost:4300/auth/login và http://localhost:4300/auth/reset-password. Bật provider Email và cấu hình confirmation/password policy theo môi trường. Không tắt xác nhận email để lách lỗi cấu hình.
 
 Đăng ký chưa có session sẽ hiển thị hướng dẫn xác nhận email. Trang login có gửi lại xác nhận và quên mật khẩu. Tạo nhân sự trong UI quản trị bắt buộc email; Supabase Admin API tạo tài khoản, backend gắn role/branch. Nếu transaction profile rollback, backend cố gắng xóa Auth user vừa tạo, và ghi ID để đối soát nếu thao tác bù thất bại.
 

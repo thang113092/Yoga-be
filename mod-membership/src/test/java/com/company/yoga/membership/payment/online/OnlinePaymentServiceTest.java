@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.company.yoga.common.exception.BusinessException;
+import com.company.yoga.identity.account.entity.UserEntity;
 import com.company.yoga.identity.account.service.AccessPolicy;
 import com.company.yoga.membership.MembershipResultCodes;
 import com.company.yoga.membership.order.entity.OrderEntity;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -46,6 +48,8 @@ class OnlinePaymentServiceTest {
     private OnlinePaymentTransactionRepository links;
     private PaymentRepository payments;
     private OrderRepository orders;
+    private AccessPolicy policy;
+    private OrderItemRepository orderItems;
     private Query eventInsert;
     private OnlinePaymentService service;
 
@@ -60,8 +64,8 @@ class OnlinePaymentServiceTest {
         links = mock(OnlinePaymentTransactionRepository.class);
         payments = mock(PaymentRepository.class);
         orders = mock(OrderRepository.class);
-        var orderItems = mock(OrderItemRepository.class);
-        var policy = mock(AccessPolicy.class);
+        orderItems = mock(OrderItemRepository.class);
+        policy = mock(AccessPolicy.class);
         var em = mock(EntityManager.class);
         var query = mock(Query.class);
         eventInsert = mock(Query.class);
@@ -107,7 +111,7 @@ class OnlinePaymentServiceTest {
         when(orders.findById(any())).thenReturn(Optional.of(order));
 
         service = new OnlinePaymentService(gateway, links, payments, orders, orderItems, mock(MembershipRepository.class), policy, em,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)), 15, "https://app/pos");
+                new TransactionTemplate(mock(PlatformTransactionManager.class)), 15, "https://app/pos", "https://app/plans", "https://app/courses");
     }
 
     @Test
@@ -284,6 +288,83 @@ class OnlinePaymentServiceTest {
                 .isInstanceOf(BusinessException.class);
         assertThat(storedLink.getStatus()).isEqualTo("CANCELLED");
         assertThat(storedPayment.getPaymentStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
+    @DisplayName("Học viên không tạo được mã thanh toán cho đơn của người khác")
+    void studentStart_otherCustomersOrder_isHidden() {
+        signInStudent(UUID.randomUUID());
+        order.setCustomerId(UUID.randomUUID());
+        when(payments.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.startForStudent(order.getId(), UUID.randomUUID()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(MembershipResultCodes.ORDER_NOT_FOUND));
+        verify(payments, never()).saveAndFlush(any());
+        verify(gateway, never()).createLink(any());
+    }
+
+    @Test
+    @DisplayName("Học viên tạo mã cho đơn của mình: link trả về trang của học viên, không phải trang quầy")
+    void studentStart_ownOrder_usesStudentReturnUrl() {
+        UUID student = UUID.randomUUID();
+        signInStudent(student);
+        order.setCustomerId(student);
+        storedLink.setCheckoutUrl(null);
+        storedLink.setCreatedAt(Instant.now());
+        when(payments.findByIdempotencyKey(storedPayment.getIdempotencyKey())).thenAnswer(inv -> Optional.of(copyPayment(storedPayment)));
+        when(links.findByPaymentId(storedPayment.getId())).thenAnswer(inv -> Optional.of(copyLink(storedLink)));
+        when(gateway.createLink(any())).thenReturn(new PaymentGateway.CreatedLink("L1", "https://pay/1", "000201"));
+
+        var resp = service.startForStudent(order.getId(), storedPayment.getIdempotencyKey());
+
+        var request = ArgumentCaptor.forClass(PaymentGateway.LinkRequest.class);
+        verify(gateway).createLink(request.capture());
+        assertThat(request.getValue().returnUrl()).isEqualTo("https://app/plans");
+        assertThat(resp.qrPayload()).isEqualTo("000201");
+    }
+
+    @Test
+    @DisplayName("Học viên trả học phí khóa học: PayOS trả về trang khóa học")
+    void studentStart_courseOrder_usesCourseReturnUrl() {
+        UUID student = UUID.randomUUID();
+        signInStudent(student);
+        order.setCustomerId(student);
+        var item = new com.company.yoga.membership.order.entity.OrderItemEntity();
+        item.setItemType("COURSE_CLASS");
+        when(orderItems.findByOrderId(order.getId())).thenReturn(List.of(item));
+        storedLink.setCheckoutUrl(null);
+        storedLink.setCreatedAt(Instant.now());
+        when(payments.findByIdempotencyKey(storedPayment.getIdempotencyKey())).thenAnswer(inv -> Optional.of(copyPayment(storedPayment)));
+        when(links.findByPaymentId(storedPayment.getId())).thenAnswer(inv -> Optional.of(copyLink(storedLink)));
+        when(gateway.createLink(any())).thenReturn(new PaymentGateway.CreatedLink("L1", "https://pay/1", "000201"));
+
+        service.startForStudent(order.getId(), storedPayment.getIdempotencyKey());
+
+        var request = ArgumentCaptor.forClass(PaymentGateway.LinkRequest.class);
+        verify(gateway).createLink(request.capture());
+        assertThat(request.getValue().returnUrl()).isEqualTo("https://app/courses");
+    }
+
+    @Test
+    @DisplayName("Học viên không xem hay hủy được mã thanh toán của người khác")
+    void studentCancel_otherCustomersLink_isHidden() {
+        signInStudent(UUID.randomUUID());
+        order.setCustomerId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.cancelForStudent(storedLink.getId()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(MembershipResultCodes.ONLINE_PAYMENT_NOT_FOUND));
+        assertThatThrownBy(() -> service.getForStudent(storedLink.getId())).isInstanceOf(BusinessException.class);
+        verify(gateway, never()).cancel(anyLong(), anyString());
+        assertThat(storedPayment.getPaymentStatus()).isEqualTo("PENDING");
+    }
+
+    private void signInStudent(UUID id) {
+        UserEntity user = new UserEntity();
+        user.setId(id);
+        when(policy.actor()).thenReturn(user);
+        when(policy.role(user)).thenReturn("STUDENT");
     }
 
     private void prepareUnattachedAttempt() {

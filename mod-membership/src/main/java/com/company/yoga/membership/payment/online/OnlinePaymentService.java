@@ -18,6 +18,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,13 +50,17 @@ public class OnlinePaymentService {
     private final TransactionTemplate transactions;
     private final int linkTtlMinutes;
     private final String returnUrl;
+    private final String studentReturnUrl;
+    private final String studentCourseReturnUrl;
     private UUID gatewayActor;
 
     public OnlinePaymentService(PaymentGateway gateway, OnlinePaymentTransactionRepository links, PaymentRepository payments,
                                 OrderRepository orders, OrderItemRepository orderItems, MembershipRepository memberships,
                                 AccessPolicy accessPolicy, EntityManager entityManager, TransactionTemplate transactions,
                                 @Value("${yoga.payments.link-ttl-minutes:15}") int linkTtlMinutes,
-                                @Value("${yoga.payments.return-url:http://localhost:4200/membership/pos}") String returnUrl) {
+                                @Value("${yoga.payments.return-url:http://localhost:4300/membership/pos}") String returnUrl,
+                                @Value("${yoga.payments.student-return-url:http://localhost:4300/membership/plans}") String studentReturnUrl,
+                                @Value("${yoga.payments.student-course-return-url:http://localhost:4300/schedule/courses}") String studentCourseReturnUrl) {
         this.gateway = gateway;
         this.links = links;
         this.payments = payments;
@@ -66,18 +72,64 @@ public class OnlinePaymentService {
         this.transactions = transactions;
         this.linkTtlMinutes = linkTtlMinutes;
         this.returnUrl = returnUrl;
+        this.studentReturnUrl = studentReturnUrl;
+        this.studentCourseReturnUrl = studentCourseReturnUrl;
     }
 
     /** VietQR shown at the counter. Repeating the call with the same key, or while a link is open, returns that link. */
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     public OnlinePaymentDto.Resp startAtCounter(UUID orderId, UUID idempotencyKey) {
+        return start(orderId, idempotencyKey, order -> accessPolicy.requireStaffBranch(order.getBranchId()), returnUrl);
+    }
+
+    /** A student paying their own pending order online. Same reuse rules as at the counter. */
+    @PreAuthorize("hasRole('STUDENT')")
+    public OnlinePaymentDto.Resp startForStudent(UUID orderId, UUID idempotencyKey) {
+        boolean course = orderItems.findByOrderId(orderId).stream().anyMatch(i -> "COURSE_CLASS".equals(i.getItemType()));
+        return start(orderId, idempotencyKey, this::requireOwnOrder, course ? studentCourseReturnUrl : studentReturnUrl);
+    }
+
+    /** The open link of a student's order, if any. */
+    @PreAuthorize("hasRole('STUDENT')")
+    public Optional<OnlinePaymentDto.Resp> openForStudent(UUID orderId) {
+        OrderEntity order = orders.findById(orderId).orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
+        requireOwnOrder(order);
+        return links.findOpenByOrderId(orderId).map(l -> view(l.getId()));
+    }
+
+    @PreAuthorize("hasRole('STUDENT')")
+    public OnlinePaymentDto.Resp getForStudent(UUID id) {
+        requireOwnLink(find(id));
+        return view(id);
+    }
+
+    /** Ask the gateway directly, e.g. when the student comes back from the gateway's page. */
+    @PreAuthorize("hasRole('STUDENT')")
+    public OnlinePaymentDto.Resp refreshForStudent(UUID id) {
+        OnlinePaymentTransactionEntity link = find(id);
+        requireOwnLink(link);
+        try {
+            reconcile(link);
+        } catch (PaymentGateway.GatewayException ex) {
+            throw new BusinessException(MembershipResultCodes.ONLINE_PAYMENT_GATEWAY_ERROR);
+        }
+        return view(id);
+    }
+
+    @PreAuthorize("hasRole('STUDENT')")
+    public OnlinePaymentDto.Resp cancelForStudent(UUID id) {
+        OnlinePaymentTransactionEntity link = find(id);
+        return cancelLink(link, requireOwnLink(link), "Học viên hủy thanh toán");
+    }
+
+    private OnlinePaymentDto.Resp start(UUID orderId, UUID idempotencyKey, Function<OrderEntity, UUID> authorize, String linkReturnUrl) {
         if (!gateway.isConfigured()) throw new BusinessException(MembershipResultCodes.ONLINE_PAYMENT_UNAVAILABLE);
         OnlinePaymentTransactionEntity link = transactions.execute(status -> {
             lockKey(idempotencyKey);
             var previous = payments.findByIdempotencyKey(idempotencyKey);
             OrderEntity order = orders.findByIdWithLock(orderId)
                     .orElseThrow(() -> new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND));
-            UUID actor = accessPolicy.requireStaffBranch(order.getBranchId());
+            UUID actor = authorize.apply(order);
             setActor(actor);
             if (previous.isPresent()) {
                 PaymentEntity p = previous.get();
@@ -94,9 +146,26 @@ public class OnlinePaymentService {
         if (link.getCheckoutUrl() == null) {
             if (link.getCreatedAt().isBefore(Instant.now().minusSeconds(30)))
                 throw new BusinessException(MembershipResultCodes.ONLINE_PAYMENT_GATEWAY_ERROR);
-            attachLink(link);
+            attachLink(link, linkReturnUrl);
         }
         return view(link.getId());
+    }
+
+    /** Students act only on orders they are the customer of; anything else looks like it does not exist. */
+    private UUID requireOwnOrder(OrderEntity order) {
+        var caller = accessPolicy.actor();
+        if (!"STUDENT".equals(accessPolicy.role(caller)) || !Objects.equals(order.getCustomerId(), caller.getId()))
+            throw new BusinessException(MembershipResultCodes.ORDER_NOT_FOUND);
+        return caller.getId();
+    }
+
+    private UUID requireOwnLink(OnlinePaymentTransactionEntity link) {
+        var caller = accessPolicy.actor();
+        UUID customer = payments.findById(link.getPaymentId()).flatMap(p -> orders.findById(p.getOrderId()))
+                .map(OrderEntity::getCustomerId).orElse(null);
+        if (!"STUDENT".equals(accessPolicy.role(caller)) || !Objects.equals(customer, caller.getId()))
+            throw new BusinessException(MembershipResultCodes.ONLINE_PAYMENT_NOT_FOUND);
+        return caller.getId();
     }
 
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
@@ -121,10 +190,14 @@ public class OnlinePaymentService {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     public OnlinePaymentDto.Resp cancel(UUID id) {
         OnlinePaymentTransactionEntity link = find(id);
-        UUID actor = accessPolicy.requireStaffBranch(link.getBranchId());
+        return cancelLink(link, accessPolicy.requireStaffBranch(link.getBranchId()), "Nhân viên hủy mã thanh toán");
+    }
+
+    private OnlinePaymentDto.Resp cancelLink(OnlinePaymentTransactionEntity link, UUID actor, String reason) {
+        UUID id = link.getId();
         if (!"CREATED".equals(link.getStatus())) return view(id);
         try {
-            gateway.cancel(link.getProviderOrderCode(), "Nhân viên hủy mã thanh toán");
+            gateway.cancel(link.getProviderOrderCode(), reason);
         } catch (PaymentGateway.GatewayException ex) {
             // The customer may have paid just now; never close a link the gateway still holds money for.
             log.warn("Cancelling online payment {} failed: {}", id, ex.getMessage());
@@ -229,11 +302,11 @@ public class OnlinePaymentService {
         return deadline;
     }
 
-    private void attachLink(OnlinePaymentTransactionEntity link) {
+    private void attachLink(OnlinePaymentTransactionEntity link, String linkReturnUrl) {
         PaymentGateway.CreatedLink created;
         try {
             created = gateway.createLink(new PaymentGateway.LinkRequest(link.getProviderOrderCode(), link.getAmount().longValueExact(),
-                    "YG" + link.getProviderOrderCode(), link.getExpiresAt(), returnUrl, returnUrl));
+                    "YG" + link.getProviderOrderCode(), link.getExpiresAt(), linkReturnUrl, linkReturnUrl));
         } catch (PaymentGateway.GatewayException ex) {
             log.warn("Creating payment link for {} failed: {}", link.getId(), ex.getMessage());
             // A concurrent request for the same attempt may have created the link first: the gateway then rejects this

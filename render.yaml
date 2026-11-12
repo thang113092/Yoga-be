@@ -29,6 +29,10 @@ services:
         sync: false
       - key: YOGA_PAYMENT_RETURN_URL
         sync: false
+      - key: YOGA_PAYMENT_STUDENT_RETURN_URL
+        sync: false
+      - key: YOGA_PAYMENT_STUDENT_COURSE_RETURN_URL
+        sync: false
       - key: ZOOM_ACCOUNT_ID
         sync: false
       - key: ZOOM_CLIENT_ID

@@ -24,7 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    @org.springframework.beans.factory.annotation.Value("${yoga.cors.origins:http://localhost:4200,http://127.0.0.1:4200}")
+    @org.springframework.beans.factory.annotation.Value("${yoga.cors.origins:http://localhost:4300,http://127.0.0.1:4300}")
     private String corsOrigins;
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

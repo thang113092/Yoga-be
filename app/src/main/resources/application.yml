@@ -62,7 +62,10 @@ yoga:
     link-ttl-minutes: ${YOGA_PAYMENT_LINK_TTL_MINUTES:15}
     reconcile-delay-ms: ${YOGA_PAYMENT_RECONCILE_DELAY_MS:120000}
     # PayOS opens this page after payment; status is always read from the backend.
-    return-url: ${YOGA_PAYMENT_RETURN_URL:http://localhost:4200/membership/pos}
+    return-url: ${YOGA_PAYMENT_RETURN_URL:http://localhost:4300/membership/pos}
+    # Same, for students paying their own order online.
+    student-return-url: ${YOGA_PAYMENT_STUDENT_RETURN_URL:http://localhost:4300/membership/plans}
+    student-course-return-url: ${YOGA_PAYMENT_STUDENT_COURSE_RETURN_URL:http://localhost:4300/schedule/courses}
     payos:
       base-url: ${PAYOS_BASE_URL:https://api-merchant.payos.vn}
       client-id: ${PAYOS_CLIENT_ID:}

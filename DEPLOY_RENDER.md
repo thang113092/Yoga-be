@@ -67,7 +67,7 @@ Tại mục **Environment Variables** (hoặc tab **Environment** trong service)
 | `SUPABASE_URL` | `https://cagwkxiccmayrtajwdtc.supabase.co` | URL Supabase project |
 | `SUPABASE_PUBLISHABLE_KEY` | `<supabase_publishable_anon_key>` | Supabase Public / Anon Key |
 | `SUPABASE_SERVICE_ROLE_KEY`| `<supabase_service_role_key>` | Service Role Key (Backend cần để tạo tài khoản nhân viên qua Supabase Admin API) |
-| `YOGA_CORS_ORIGINS` | `http://localhost:4200,https://your-frontend.vercel.app` | Danh sách URL Frontend được phép gọi API (phân cách bằng dấu phẩy) |
+| `YOGA_CORS_ORIGINS` | `http://localhost:4300,https://your-frontend.vercel.app` | Danh sách URL Frontend được phép gọi API (phân cách bằng dấu phẩy) |
 
 > ⚠️ **Lưu ý đặc biệt về Supabase URL**: Render Free Tier không hỗ trợ kết nối IPv6 trực tiếp. Hãy luôn sử dụng **Supabase Pooler URL** (có dạng `aws-0-...pooler.supabase.com` ở cổng `6543` hoặc `5432`), không dùng direct connection host (`db.xxxx.supabase.co`).
 

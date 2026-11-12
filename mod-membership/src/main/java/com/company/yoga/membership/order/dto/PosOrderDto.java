@@ -34,6 +34,21 @@ public final class PosOrderDto {
         }
     }
 
+    /** A student's own online purchase: the customer is the caller, and the price cannot be adjusted. */
+    public record SelfServiceOrderReq(
+            @NotNull(message = "Chi nhánh không được để trống")
+            UUID branchId,
+
+            @NotNull(message = "Gói tập không được để trống")
+            UUID planId,
+
+            UUID replacesMembershipId,
+            @NotNull(message = "Thiếu số tiền khấu trừ đã báo giá")
+            BigDecimal expectedCredit,
+            @NotNull(message = "Thiếu tổng tiền đã báo giá")
+            BigDecimal expectedTotal
+    ) {}
+
     public record CheckoutQuote(com.company.yoga.membership.plan.dto.MembershipDto.Resp currentMembership,
             String currentPlanName, BigDecimal contractValue, BigDecimal credit, BigDecimal totalAmount, String issue) {}
 

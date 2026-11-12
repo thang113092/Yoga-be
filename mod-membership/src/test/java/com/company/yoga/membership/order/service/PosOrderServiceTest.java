@@ -241,4 +241,80 @@ class PosOrderServiceTest {
         when(query.getSingleResult()).thenThrow(failure);
         assertThatThrownBy(() -> service.getCheckoutQuote(UUID.randomUUID(), plan, UUID.randomUUID())).isSameAs(failure);
     }
+
+    @Test
+    @DisplayName("Học viên tự mua: chính học viên là khách và người lập đơn, có ghi chú mua online")
+    void createSelfServiceOrder_usesCallerAsCustomerAndCashier() {
+        UUID me = UUID.randomUUID(), planId = UUID.randomUUID(), branchId = UUID.randomUUID();
+        signInStudent(me);
+        activeBranch(branchId);
+        MembershipPlanEntity plan = new MembershipPlanEntity();
+        plan.setId(planId); plan.setName("Thẻ 1 tháng"); plan.setPrice(new BigDecimal("900000"));
+        plan.setDurationDays(30); plan.setIsAllBranches(false); plan.setIsActive(true);
+        when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+        var saved = org.mockito.ArgumentCaptor.forClass(OrderEntity.class);
+
+        var resp = service.createSelfServiceOrder(new PosOrderDto.SelfServiceOrderReq(branchId, planId, null, BigDecimal.ZERO, new BigDecimal("900000")), UUID.randomUUID());
+
+        verify(orderRepository).save(saved.capture());
+        assertThat(saved.getValue().getCustomerId()).isEqualTo(me);
+        assertThat(saved.getValue().getCashierId()).isEqualTo(me);
+        assertThat(saved.getValue().getNotes()).isEqualTo(PosOrderService.SELF_SERVICE_NOTE);
+        assertThat(resp.totalAmount()).isEqualByComparingTo("900000");
+        verify(policy, org.mockito.Mockito.never()).requireStaffBranch(any());
+    }
+
+    @Test
+    @DisplayName("Học viên tự mua: số tiền khác báo giá thì từ chối để học viên tải lại")
+    void createSelfServiceOrder_staleQuote_isRejected() {
+        UUID planId = UUID.randomUUID(), branchId = UUID.randomUUID();
+        signInStudent(UUID.randomUUID());
+        activeBranch(branchId);
+        MembershipPlanEntity plan = new MembershipPlanEntity();
+        plan.setId(planId); plan.setName("Thẻ 1 tháng"); plan.setPrice(new BigDecimal("900000")); plan.setIsActive(true);
+        when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+
+        assertThatThrownBy(() -> service.createSelfServiceOrder(new PosOrderDto.SelfServiceOrderReq(branchId, planId, null, BigDecimal.ZERO, new BigDecimal("800000")), UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class);
+        verify(orderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Học viên không mua được tại cơ sở đã ngừng hoạt động")
+    void selfServiceQuote_inactiveBranch_isRejected() {
+        signInStudent(UUID.randomUUID());
+        UUID branchId = UUID.randomUUID();
+        var branch = new com.company.yoga.branch.facility.entity.BranchEntity();
+        branch.setIsActive(false);
+        when(branchRepository.findById(branchId)).thenReturn(Optional.of(branch));
+
+        assertThatThrownBy(() -> service.getSelfServiceQuote(UUID.randomUUID(), branchId)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("Học viên không hủy được đơn của người khác")
+    void cancelOwnPendingOrder_otherCustomer_isHidden() {
+        signInStudent(UUID.randomUUID());
+        OrderEntity order = new OrderEntity();
+        order.setId(UUID.randomUUID()); order.setCustomerId(UUID.randomUUID()); order.setStatus("PENDING");
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.cancelOwnPendingOrder(order.getId()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", MembershipResultCodes.ORDER_NOT_FOUND);
+        verify(query, org.mockito.Mockito.never()).getSingleResult();
+    }
+
+    private void signInStudent(UUID id) {
+        var user = new com.company.yoga.identity.account.entity.UserEntity();
+        user.setId(id);
+        when(policy.actor()).thenReturn(user);
+        when(policy.role(user)).thenReturn("STUDENT");
+    }
+
+    private void activeBranch(UUID id) {
+        var branch = new com.company.yoga.branch.facility.entity.BranchEntity();
+        branch.setIsActive(true);
+        when(branchRepository.findById(id)).thenReturn(Optional.of(branch));
+    }
 }

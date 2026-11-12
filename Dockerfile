@@ -11,6 +11,7 @@ COPY mod-branch/pom.xml mod-branch/
 COPY mod-identity/pom.xml mod-identity/
 COPY mod-membership/pom.xml mod-membership/
 COPY mod-schedule/pom.xml mod-schedule/
+COPY mod-content/pom.xml mod-content/
 COPY app/pom.xml app/
 
 # Download dependencies in advance
@@ -22,6 +23,7 @@ COPY mod-branch/src mod-branch/src
 COPY mod-identity/src mod-identity/src
 COPY mod-membership/src mod-membership/src
 COPY mod-schedule/src mod-schedule/src
+COPY mod-content/src mod-content/src
 COPY app/src app/src
 
 # Build production executable JAR (app module produces the fat jar)

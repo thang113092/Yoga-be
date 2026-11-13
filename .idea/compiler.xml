@@ -22,6 +22,7 @@
         <module name="common" />
         <module name="mod-identity" />
         <module name="mod-membership" />
+        <module name="mod-ai" />
         <module name="mod-schedule" />
       </profile>
     </annotationProcessing>
@@ -30,6 +31,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="app" options="-parameters -parameters" />
       <module name="common" options="-parameters -parameters" />
+      <module name="mod-ai" options="-parameters -parameters" />
       <module name="mod-branch" options="-parameters -parameters" />
       <module name="mod-content" options="-parameters -parameters" />
       <module name="mod-identity" options="-parameters -parameters" />

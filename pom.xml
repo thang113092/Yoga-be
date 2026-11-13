@@ -25,6 +25,7 @@
         <module>mod-membership</module>
         <module>mod-schedule</module>
         <module>mod-content</module>
+        <module>mod-ai</module>
         <module>app</module>
     </modules>
 
@@ -75,6 +76,11 @@
             <dependency>
                 <groupId>com.company.yoga</groupId>
                 <artifactId>mod-content</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.company.yoga</groupId>
+                <artifactId>mod-ai</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

@@ -122,6 +122,37 @@ yoga:
       cdn-hostname: ${BUNNY_CDN_HOSTNAME:}
       # Bí mật trong URL webhook: https://<backend>/api/v1/integration-webhooks/bunny?token=<bí mật>
       webhook-secret: ${BUNNY_WEBHOOK_SECRET:}
+  # Tính năng AI (AI_INTEGRATION_PLAN.md). Tắt thì hệ thống vẫn chạy đủ, chỉ ẩn các nút AI.
+  # Bật mà thiếu khóa, hoặc tính năng có mô hình mà thiếu giá, thì ứng dụng không khởi động.
+  ai:
+    enabled: ${YOGA_AI_ENABLED:false}
+    provider: ${YOGA_AI_PROVIDER:gemini}
+    gemini:
+      # Khóa Gemini API gói TRẢ PHÍ (gói miễn phí cho phép Google dùng dữ liệu gửi lên). Không đưa khóa thật vào Git.
+      api-key: ${GEMINI_API_KEY:}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+      timeout-seconds: ${YOGA_AI_TIMEOUT_SECONDS:60}
+      # Thử lại khi Gemini quá tải (429) hoặc lỗi 5xx.
+      max-retries: ${YOGA_AI_MAX_RETRIES:2}
+    features:
+      # Gợi ý chủ đề/cấp độ/mô tả/lưu ý an toàn cho video. Để trống model thì tắt riêng tính năng này.
+      # Chỉ dùng mô hình ổn định (không preview/exp); đổi mô hình hoặc prompt thì chạy lại bộ mẫu đánh giá.
+      video-tagging:
+        model: ${YOGA_AI_TAGGING_MODEL:}
+        max-output-tokens: ${YOGA_AI_TAGGING_MAX_OUTPUT:2048}
+        # Chỉ gửi khi đặt giá trị; dùng thinking-level hoặc thinking-budget tùy mô hình hỗ trợ.
+        thinking-level: ${YOGA_AI_TAGGING_THINKING_LEVEL:}
+        thinking-budget: ${YOGA_AI_TAGGING_THINKING_BUDGET:}
+        # Giá USD cho 1 triệu token theo bảng giá Google của đúng mô hình trên. Bắt buộc khi có model.
+        price-input: ${YOGA_AI_TAGGING_PRICE_INPUT:}
+        price-cached-input: ${YOGA_AI_TAGGING_PRICE_CACHED_INPUT:}
+        price-output: ${YOGA_AI_TAGGING_PRICE_OUTPUT:}
+    quota:
+      student-requests-per-day: ${YOGA_AI_STUDENT_DAILY_REQUESTS:30}
+      staff-requests-per-day: ${YOGA_AI_STAFF_DAILY_REQUESTS:100}
+      # Trần chi phí toàn hệ thống mỗi ngày (giờ VN), USD; vượt thì tạm dừng AI đến 0h. 0 = không giới hạn.
+      daily-budget-usd: ${YOGA_AI_DAILY_BUDGET_USD:20}
+      alert-percent: ${YOGA_AI_BUDGET_ALERT_PERCENT:80}
 
 supabase:
   url: ${SUPABASE_URL:https://cagwkxiccmayrtajwdtc.supabase.co}

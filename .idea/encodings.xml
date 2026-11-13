@@ -3,6 +3,7 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/app/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/mod-ai/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mod-branch/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mod-content/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mod-identity/src/main/java" charset="UTF-8" />

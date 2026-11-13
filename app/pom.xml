@@ -39,6 +39,10 @@
             <groupId>com.company.yoga</groupId>
             <artifactId>mod-content</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.company.yoga</groupId>
+            <artifactId>mod-ai</artifactId>
+        </dependency>
 
         <!-- Spring Boot Starters -->
         <dependency>

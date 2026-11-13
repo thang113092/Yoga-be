@@ -84,4 +84,12 @@ class CourseServiceTest {
         assertThrows(BusinessException.class,()->service.createClass(request(List.of(session(Instant.now().plusSeconds(86400))))));
         verify(dao,never()).update(anyString(),anyMap());verifyNoInteractions(scheduleService);
     }
+    @Test void listsClassesWithoutDeliveryModeFilter() {
+        var actor=new com.company.yoga.identity.account.entity.UserEntity();
+        when(access.actor()).thenReturn(actor); when(access.role(actor)).thenReturn("SUPER_ADMIN");
+        when(dao.rows(anyString(),anyMap())).thenReturn(List.of());
+        assertDoesNotThrow(()->service.classes(null,null));
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> args=ArgumentCaptor.forClass(Map.class);
+        verify(dao).rows(anyString(),args.capture()); assertNull(args.getValue().get("mode"));
+    }
 }

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -111,7 +112,49 @@ class OnlinePaymentServiceTest {
         when(orders.findById(any())).thenReturn(Optional.of(order));
 
         service = new OnlinePaymentService(gateway, links, payments, orders, orderItems, mock(MembershipRepository.class), policy, em,
-                new TransactionTemplate(mock(PlatformTransactionManager.class)), 15, "https://app/pos", "https://app/plans", "https://app/courses");
+                new TransactionTemplate(mock(PlatformTransactionManager.class)), 15, "https://app/pos", "https://app/plans", "https://app/courses", 10);
+    }
+
+    @Test
+    @DisplayName("Webhook không về: màn hình đang hỏi trạng thái tự hỏi cổng và xác nhận khoản đã trả")
+    void poll_missedWebhook_confirmsFromGateway() {
+        when(gateway.getStatus(100001L)).thenReturn(new PaymentGateway.LinkStatus("PAID", 2000, "FT5", Instant.now()));
+
+        var resp = service.get(storedLink.getId());
+
+        assertThat(resp.status()).isEqualTo("PAID");
+        assertThat(storedPayment.getPaymentStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    @DisplayName("Hỏi trạng thái liên tục chỉ gọi cổng một lần mỗi khoảng chờ")
+    void poll_asksGatewayAtMostOncePerInterval() {
+        when(gateway.getStatus(100001L)).thenReturn(new PaymentGateway.LinkStatus("PENDING", 0, null, null));
+
+        service.get(storedLink.getId());
+        service.get(storedLink.getId());
+        service.get(storedLink.getId());
+
+        verify(gateway, times(1)).getStatus(100001L);
+        assertThat(storedLink.getStatus()).isEqualTo("CREATED");
+    }
+
+    @Test
+    @DisplayName("Cổng lỗi khi hỏi trạng thái thì vẫn trả trạng thái đang lưu, không báo lỗi")
+    void poll_gatewayError_returnsStoredStatus() {
+        when(gateway.getStatus(100001L)).thenThrow(new PaymentGateway.GatewayException("timeout", false));
+
+        assertThat(service.get(storedLink.getId()).status()).isEqualTo("CREATED");
+    }
+
+    @Test
+    @DisplayName("Mã đã thanh toán thì hỏi trạng thái không gọi cổng")
+    void poll_closedLink_doesNotAskGateway() {
+        storedLink.setStatus("PAID");
+
+        service.get(storedLink.getId());
+
+        verify(gateway, never()).getStatus(anyLong());
     }
 
     @Test

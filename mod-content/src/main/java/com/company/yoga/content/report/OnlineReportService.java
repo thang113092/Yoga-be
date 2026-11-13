@@ -166,7 +166,7 @@ public class OnlineReportService {
     }
 
     /** A booking that uses an online seat: every booking of an online class, online seats of hybrid classes (V19). */
-    static final String ONLINE_SEAT = "b.attendance_mode='ONLINE'";
+    static final String ONLINE_SEAT = " b.attendance_mode='ONLINE' ";  // spaces: text blocks strip trailing blanks
 
     private UUID branchScope(UUID requested) {
         UserEntity actor = accessPolicy.actor();

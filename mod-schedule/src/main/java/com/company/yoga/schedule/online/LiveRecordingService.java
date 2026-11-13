@@ -36,11 +36,15 @@ public class LiveRecordingService {
     private final NamedParameterJdbcTemplate jdbc;
     private final VideoHostingProvider videos;
     private final LiveMeetingProvider zoom;
+    /** Wait before looking for the fetched video on Bunny. */
+    private final int checkSeconds;
 
-    public LiveRecordingService(NamedParameterJdbcTemplate jdbc, VideoHostingProvider videos, LiveMeetingProvider zoom) {
+    public LiveRecordingService(NamedParameterJdbcTemplate jdbc, VideoHostingProvider videos, LiveMeetingProvider zoom,
+                                @org.springframework.beans.factory.annotation.Value("${yoga.content.recording-check-seconds:60}") int checkSeconds) {
         this.jdbc = jdbc;
         this.videos = videos;
         this.zoom = zoom;
+        this.checkSeconds = Math.max(1, checkSeconds);
     }
 
     /** Returns 1 when a recording was queued, 0 when the meeting is unknown, not recorded on purpose, or already queued. */
@@ -120,7 +124,7 @@ public class LiveRecordingService {
         videos.fetchFromUrl((String) r.get("download_url"), Map.of("Authorization", "Bearer " + token), (String) r.get("import_title"));
         jdbc.update("""
                 UPDATE yoga.live_recordings SET status='FETCH_REQUESTED',attempts=attempts+1,last_error=NULL,fetch_requested_at=CURRENT_TIMESTAMP,
-                  next_attempt_at=CURRENT_TIMESTAMP+INTERVAL '1 minute' WHERE id=:id AND status='RECEIVED'""", Map.of("id", id));
+                  next_attempt_at=CURRENT_TIMESTAMP+make_interval(secs=>:secs) WHERE id=:id AND status='RECEIVED'""", Map.of("id", id, "secs", checkSeconds));
     }
 
     private void findImported(UUID id, Map<String, Object> r) {

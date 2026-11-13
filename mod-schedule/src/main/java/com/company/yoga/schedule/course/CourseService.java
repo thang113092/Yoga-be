@@ -85,7 +85,8 @@ public class CourseService {
             access.requireStaffBranch(branchId);
         }
         var a=new HashMap<String,Object>(); a.put("branch",branchId); a.put("student",role.equals("STUDENT"));
-        a.put("mode",Set.of("IN_PERSON","ONLINE").contains(deliveryMode) ? deliveryMode : null);
+        // Set.of(...).contains(null) throws NPE; the course page calls this endpoint without a mode filter.
+        a.put("mode",deliveryMode!=null && Set.of("IN_PERSON","ONLINE").contains(deliveryMode) ? deliveryMode : null);
         return dao.rows(CLASS_SELECT+" WHERE (CAST(:branch AS uuid) IS NULL OR c.branch_id=CAST(:branch AS uuid)) AND (:student=false OR c.status<>'DRAFT')"
             +" AND (CAST(:mode AS VARCHAR) IS NULL OR c.delivery_mode=:mode) ORDER BY c.created_at DESC",a);
     }

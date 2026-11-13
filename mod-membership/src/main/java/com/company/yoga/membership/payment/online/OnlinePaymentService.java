@@ -17,10 +17,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -52,6 +54,9 @@ public class OnlinePaymentService {
     private final String returnUrl;
     private final String studentReturnUrl;
     private final String studentCourseReturnUrl;
+    private final Duration pollGatewayInterval;
+    /** Last time a poll asked the gateway about a link; per instance, which only makes the gap shorter, never unsafe. */
+    private final Map<UUID, Instant> lastGatewayCheck = new ConcurrentHashMap<>();
     private UUID gatewayActor;
 
     public OnlinePaymentService(PaymentGateway gateway, OnlinePaymentTransactionRepository links, PaymentRepository payments,
@@ -60,7 +65,9 @@ public class OnlinePaymentService {
                                 @Value("${yoga.payments.link-ttl-minutes:15}") int linkTtlMinutes,
                                 @Value("${yoga.payments.return-url:http://localhost:4300/membership/pos}") String returnUrl,
                                 @Value("${yoga.payments.student-return-url:http://localhost:4300/membership/plans}") String studentReturnUrl,
-                                @Value("${yoga.payments.student-course-return-url:http://localhost:4300/schedule/courses}") String studentCourseReturnUrl) {
+                                @Value("${yoga.payments.student-course-return-url:http://localhost:4300/schedule/courses}") String studentCourseReturnUrl,
+                                @Value("${yoga.payments.poll-gateway-interval-seconds:10}") long pollGatewayIntervalSeconds) {
+        this.pollGatewayInterval = Duration.ofSeconds(pollGatewayIntervalSeconds);
         this.gateway = gateway;
         this.links = links;
         this.payments = payments;
@@ -99,7 +106,9 @@ public class OnlinePaymentService {
 
     @PreAuthorize("hasRole('STUDENT')")
     public OnlinePaymentDto.Resp getForStudent(UUID id) {
-        requireOwnLink(find(id));
+        OnlinePaymentTransactionEntity link = find(id);
+        requireOwnLink(link);
+        checkGatewayIfDue(link);
         return view(id);
     }
 
@@ -170,8 +179,37 @@ public class OnlinePaymentService {
 
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'BRANCH_MANAGER', 'RECEPTIONIST')")
     public OnlinePaymentDto.Resp get(UUID id) {
-        accessPolicy.requireStaffBranch(find(id).getBranchId());
+        OnlinePaymentTransactionEntity link = find(id);
+        accessPolicy.requireStaffBranch(link.getBranchId());
+        checkGatewayIfDue(link);
         return view(id);
+    }
+
+    /**
+     * Fallback for a webhook that never arrives (not registered, backend unreachable, asleep): the screen polls every few
+     * seconds, and at most one poll per link per interval also asks the gateway. Failures are left to the next poll.
+     */
+    private void checkGatewayIfDue(OnlinePaymentTransactionEntity link) {
+        if (!"CREATED".equals(link.getStatus())) {
+            lastGatewayCheck.remove(link.getId());
+            return;
+        }
+        if (pollGatewayInterval.isZero() || pollGatewayInterval.isNegative() || !gateway.isConfigured()) return;
+        Instant now = Instant.now();
+        boolean[] due = {false};
+        lastGatewayCheck.compute(link.getId(), (k, previous) -> {
+            if (previous != null && previous.isAfter(now.minus(pollGatewayInterval))) return previous;
+            due[0] = true;
+            return now;
+        });
+        if (!due[0]) return;
+        try {
+            reconcile(link);
+        } catch (PaymentGateway.GatewayException ex) {
+            log.debug("Gateway check for online payment {} failed: {}", link.getId(), ex.getMessage());
+        } catch (RuntimeException ex) {
+            log.warn("Gateway check for online payment {} failed: {}", link.getId(), ex.getMessage());
+        }
     }
 
     /** Ask the gateway directly; covers a missed webhook without waiting for the reconciliation job. */
@@ -227,6 +265,8 @@ public class OnlinePaymentService {
 
     /** Closes expired links and catches payments whose webhook never arrived. */
     public void reconcileOpenLinks() {
+        Instant stale = Instant.now().minus(Duration.ofHours(1));
+        lastGatewayCheck.values().removeIf(t -> t.isBefore(stale));
         if (!gateway.isConfigured()) return;
         for (OnlinePaymentTransactionEntity link : links.findOpenCreatedBefore(Instant.now().minusSeconds(60), PageRequest.of(0, 50))) {
             try {

@@ -60,7 +60,10 @@ logging:
 yoga:
   payments:
     link-ttl-minutes: ${YOGA_PAYMENT_LINK_TTL_MINUTES:15}
-    reconcile-delay-ms: ${YOGA_PAYMENT_RECONCILE_DELAY_MS:120000}
+    reconcile-delay-ms: ${YOGA_PAYMENT_RECONCILE_DELAY_MS:30000}
+    # While a QR screen is open, its status polls also ask PayOS at most this often per code (0 = off),
+    # so a payment is confirmed even when the webhook never arrives.
+    poll-gateway-interval-seconds: ${YOGA_PAYMENT_POLL_GATEWAY_SECONDS:10}
     # PayOS opens this page after payment; status is always read from the backend.
     return-url: ${YOGA_PAYMENT_RETURN_URL:http://localhost:4300/membership/pos}
     # Same, for students paying their own order online.
@@ -89,6 +92,10 @@ yoga:
       use-registration: ${ZOOM_USE_REGISTRATION:true}
       # Email giả cho registrant (Zoom bắt buộc email; không gửi thư).
       registrant-email-domain: ${ZOOM_REGISTRANT_EMAIL_DOMAIN:students.anyen.invalid}
+  notifications:
+    # Tạo nhắc gia hạn/khóa học sắp bắt đầu mỗi giờ (chống trùng trong database).
+    delay-ms: ${YOGA_NOTIFICATIONS_DELAY_MS:3600000}
+    initial-delay-ms: ${YOGA_NOTIFICATIONS_INITIAL_DELAY_MS:60000}
   content:
     # Số thiết bị xem video cùng lúc của một học viên.
     max-devices: ${YOGA_CONTENT_MAX_DEVICES:2}
@@ -99,6 +106,9 @@ yoga:
     # Đổi phiên bản khi sửa nội dung cam kết an toàn.
     waiver-version: ${YOGA_CONTENT_WAIVER_VERSION:2026-11}
     sync-delay-ms: ${YOGA_CONTENT_SYNC_DELAY_MS:60000}
+    # Nhập bản ghi buổi live (Zoom cloud) vào Bunny: chu kỳ job và thời gian chờ trước khi tìm video vừa fetch.
+    recording-delay-ms: ${YOGA_CONTENT_RECORDING_DELAY_MS:60000}
+    recording-check-seconds: ${YOGA_CONTENT_RECORDING_CHECK_SECONDS:60}
     bunny:
       api-base-url: ${BUNNY_API_BASE_URL:https://video.bunnycdn.com}
       embed-base-url: ${BUNNY_EMBED_BASE_URL:https://iframe.mediadelivery.net}

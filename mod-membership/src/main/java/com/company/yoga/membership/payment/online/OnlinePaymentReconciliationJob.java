@@ -11,7 +11,7 @@ public class OnlinePaymentReconciliationJob {
 
     private final OnlinePaymentService onlinePayments;
 
-    @Scheduled(fixedDelayString = "${yoga.payments.reconcile-delay-ms:120000}")
+    @Scheduled(fixedDelayString = "${yoga.payments.reconcile-delay-ms:30000}")
     public void reconcile() {
         onlinePayments.reconcileOpenLinks();
     }

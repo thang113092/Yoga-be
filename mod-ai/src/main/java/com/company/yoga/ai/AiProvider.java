@@ -23,6 +23,16 @@ public interface AiProvider {
      */
     ChatResult chat(ChatRequest request);
 
+    /**
+     * Same as {@link #chat} but passes the answer text to {@code onText} piece by piece as the provider produces it.
+     * Providers without streaming deliver the whole text at the end.
+     */
+    default ChatResult chatStream(ChatRequest request, java.util.function.Consumer<String> onText) {
+        ChatResult result = chat(request);
+        if (result.turn().text() != null && !result.turn().text().isEmpty()) onText.accept(result.turn().text());
+        return result;
+    }
+
     /** A function the model may call; {@code parameters} uses the same schema subset as {@link JsonRequest}. */
     record ToolSpec(String name, String description, Map<String, Object> parameters) {
     }

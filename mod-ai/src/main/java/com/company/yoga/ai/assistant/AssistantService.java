@@ -58,6 +58,21 @@ public class AssistantService {
     public record Answer(UUID conversationId, String title, Message message) {
     }
 
+    /** Progress of a streamed answer. */
+    public interface Listener {
+        /** A piece of the answer text. */
+        default void onText(String delta) {
+        }
+
+        /** The text shown so far was a preamble before looking something up: clear it. */
+        default void onReset() {
+        }
+
+        /** A function is being called (shown as "Đang tra ..."). */
+        default void onTool(String name) {
+        }
+    }
+
     private final AiProperties properties;
     private final AiProvider provider;
     private final AiUsageService usage;
@@ -160,6 +175,11 @@ public class AssistantService {
     // ---------------------------------------------------------------- questions
 
     public Answer ask(UUID conversationId, String question) {
+        return ask(conversationId, question, null);
+    }
+
+    /** @param listener null for a plain request; otherwise the answer streams to it as it is produced */
+    public Answer ask(UUID conversationId, String question, Listener listener) {
         Session s = session();
         if (!available(s.profile().featureKey())) throw new BusinessException(AiResultCodes.DISABLED);
         String q = question == null ? "" : question.trim();
@@ -170,19 +190,19 @@ public class AssistantService {
             List<Stored> stored = load(conversationId);
             if (stored.size() + 3 > properties.conversations().maxMessages()) throw new BusinessException(AiResultCodes.CONVERSATION_FULL);
             usage.checkQuota(s.caller().userId(), s.profile().staff());
-            return run(conversationId, title, stored, q, s);
+            return run(conversationId, title, stored, q, s, listener);
         } finally {
             inFlight.remove(conversationId);
         }
     }
 
-    private Answer run(UUID conversationId, String title, List<Stored> stored, String question, Session s) {
+    private Answer run(UUID conversationId, String title, List<Stored> stored, String question, Session s, Listener listener) {
         AssistantProfile profile = s.profile();
         UUID me = s.caller().userId();
         AiProperties.Feature feature = properties.feature(profile.featureKey());
         Prompts.Prompt prompt = prompts.get(profile.prompt());
         Map<String, AiTool> tools = new LinkedHashMap<>();
-        profile.tools().forEach(t -> tools.put(t.spec().name(), t));
+        profile.tools(s.caller()).forEach(t -> tools.put(t.spec().name(), t));
         List<AiProvider.ToolSpec> specs = tools.values().stream().map(AiTool::spec).toList();
 
         List<Turn> history = new ArrayList<>(stored.stream().map(Stored::turn).toList());
@@ -197,9 +217,14 @@ public class AssistantService {
         for (int round = 0; round <= feature.maxToolRounds() && answer == null; round++) {
             boolean allowTools = round < feature.maxToolRounds();
             AiProvider.ChatResult result;
+            boolean[] shown = {false};
             try {
-                result = provider.chat(new AiProvider.ChatRequest(feature.model(), prompt.text(), List.copyOf(history), specs, allowTools,
-                        feature.maxOutputTokens(), feature.thinkingLevel(), feature.thinkingBudget()));
+                var request = new AiProvider.ChatRequest(feature.model(), prompt.text(), List.copyOf(history), specs, allowTools,
+                        feature.maxOutputTokens(), feature.thinkingLevel(), feature.thinkingBudget());
+                result = listener == null ? provider.chat(request) : provider.chatStream(request, delta -> {
+                    shown[0] = true;
+                    listener.onText(delta);
+                });
             } catch (AiProvider.ProviderException e) {
                 if (e.usage().inputTokens() > 0 || e.usage().outputTokens() > 0) usage.record(me, feature, e.usage(), round == 0);
                 throw new BusinessException(switch (e.failure()) {
@@ -223,9 +248,11 @@ public class AssistantService {
                         ? "Xin lỗi, tôi chưa trả lời được câu này. Bạn thử hỏi cụ thể hơn nhé." : model.text();
                 break;
             }
+            if (listener != null && shown[0]) listener.onReset();
             List<ToolResult> results = new ArrayList<>();
             for (ToolCall call : model.calls()) {
                 used.add(call.name());
+                if (listener != null) listener.onTool(call.name());
                 Map<String, Object> response = runTool(tools.get(call.name()), call);
                 actions.addAll(actions(response));
                 results.add(new ToolResult(call.id(), call.name(), response));

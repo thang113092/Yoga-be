@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .authenticationEntryPoint((req, res, ex) -> { res.setStatus(401); res.setContentType("application/json"); res.getWriter().write("{\"success\":false,\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}"); })
                 .accessDeniedHandler((req, res, ex) -> { res.setStatus(403); res.setContentType("application/json"); res.getWriter().write("{\"success\":false,\"code\":\"FORBIDDEN\",\"message\":\"Access denied\"}"); }))
             .authorizeHttpRequests(auth -> auth
+                // 0. Lượt dispatch nội bộ (kết thúc SSE trả lời dần của trợ lý AI, trang lỗi): request gốc đã qua xác thực
+                .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC, jakarta.servlet.DispatcherType.ERROR).permitAll()
                 // 1. Công khai: Xác thực & Đăng ký (chỉ STUDENT), API Docs, Actuator
                 .requestMatchers(
                     "/swagger-ui/**",

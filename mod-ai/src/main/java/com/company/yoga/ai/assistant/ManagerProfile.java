@@ -54,7 +54,7 @@ public class ManagerProfile implements AssistantProfile {
     }
 
     @Override
-    public List<AiTool> tools() {
+    public List<AiTool> tools(Caller caller) {
         return reports.tools();
     }
 }

@@ -1,32 +1,56 @@
 package com.company.yoga.ai;
 
 import com.company.yoga.ai.assistant.AssistantService;
+import com.company.yoga.ai.assistant.HealthConsentService;
 import com.company.yoga.common.api.ApiResponse;
+import com.company.yoga.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.RejectedExecutionException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-@Tag(name = "AI", description = "Tính năng AI (Gemini): gợi ý chủ đề video, trợ lý số liệu cho quản lý, trợ lý cho học viên")
+@Tag(name = "AI", description = "Tính năng AI (Gemini): gợi ý chủ đề video, trợ lý cho quản lý, học viên, lễ tân và HLV")
 @RestController
-@RequiredArgsConstructor
+@Slf4j
 public class AiController {
 
     private final VideoTaggingService tagging;
     private final AssistantService assistant;
+    private final HealthConsentService consents;
+    private final TaskExecutor streamExecutor;
 
-    public record Status(boolean videoTagging, boolean managerChat, boolean studentChat) {
+    public AiController(VideoTaggingService tagging, AssistantService assistant, HealthConsentService consents,
+                        @Qualifier("aiStreamExecutor") TaskExecutor streamExecutor) {
+        this.tagging = tagging;
+        this.assistant = assistant;
+        this.consents = consents;
+        this.streamExecutor = streamExecutor;
+    }
+
+    public record Status(boolean videoTagging, boolean managerChat, boolean studentChat, boolean staffChat) {
     }
 
     public record ReviewReq(
@@ -41,10 +65,14 @@ public class AiController {
                          @Size(max = AssistantService.MAX_QUESTION, message = "Câu hỏi tối đa 2000 ký tự") String text) {
     }
 
+    public record ConsentReq(@NotNull Boolean consented) {
+    }
+
     @Operation(summary = "Tính năng AI nào đang bật (để giao diện ẩn/hiện nút)")
     @GetMapping("/api/v1/ai/status")
     public ApiResponse<Status> status() {
-        return ApiResponse.success(new Status(tagging.available(), assistant.available(AiProperties.MANAGER_CHAT), assistant.available(AiProperties.STUDENT_CHAT)));
+        return ApiResponse.success(new Status(tagging.available(), assistant.available(AiProperties.MANAGER_CHAT),
+                assistant.available(AiProperties.STUDENT_CHAT), assistant.available(AiProperties.STAFF_CHAT)));
     }
 
     // ---- video tag suggestions ----
@@ -63,9 +91,9 @@ public class AiController {
         return ApiResponse.success(null);
     }
 
-    // ---- manager assistant ----
+    // ---- assistants (the caller's role picks the assistant) ----
 
-    @Operation(summary = "Hội thoại với trợ lý của tôi (quản lý: trợ lý số liệu; học viên: trợ lý học viên), mới nhất trước")
+    @Operation(summary = "Hội thoại với trợ lý của tôi, mới nhất trước")
     @GetMapping("/api/v1/ai/conversations")
     public ApiResponse<List<AssistantService.Conversation>> conversations() {
         return ApiResponse.success(assistant.conversations());
@@ -89,10 +117,95 @@ public class AiController {
         return ApiResponse.success(assistant.ask(id, req.text()));
     }
 
+    /**
+     * Same as {@link #ask} but streams Server-Sent Events: {@code delta} {text}, {@code reset} (drop the preamble shown
+     * so far), {@code tool} {name}, then {@code done} with the stored answer, or {@code error} {code, message}.
+     */
+    @Operation(summary = "Hỏi trợ lý, câu trả lời hiện dần (text/event-stream)")
+    @PostMapping(value = "/api/v1/ai/conversations/{id}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter askStream(@PathVariable UUID id, @Valid @RequestBody AskReq req, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("X-Accel-Buffering", "no");
+        SseEmitter emitter = new SseEmitter(180_000L);
+        SecurityContext context = SecurityContextHolder.getContext();
+        Sender send = new Sender(emitter);
+        try {
+            streamExecutor.execute(() -> {
+                SecurityContextHolder.setContext(context);
+                try {
+                    AssistantService.Answer answer = assistant.ask(id, req.text(), new AssistantService.Listener() {
+                        @Override
+                        public void onText(String delta) {
+                            send.event("delta", Map.of("text", delta));
+                        }
+
+                        @Override
+                        public void onReset() {
+                            send.event("reset", Map.of());
+                        }
+
+                        @Override
+                        public void onTool(String name) {
+                            send.event("tool", Map.of("name", name));
+                        }
+                    });
+                    send.event("done", answer);
+                } catch (BusinessException e) {
+                    send.event("error", Map.of("code", e.getErrorCode().getCode(), "message", e.getMessage()));
+                } catch (RuntimeException e) {
+                    log.error("Streamed assistant answer failed", e);
+                    send.event("error", Map.of("code", "AI_500", "message", "Trợ lý gặp lỗi. Vui lòng thử lại."));
+                } finally {
+                    SecurityContextHolder.clearContext();
+                    emitter.complete();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            send.event("error", Map.of("code", AiResultCodes.BUSY.getCode(), "message", AiResultCodes.BUSY.getMessage()));
+            emitter.complete();
+        }
+        return emitter;
+    }
+
+    /** Sends events until the client goes away; after that the answer still completes and is stored. */
+    private static final class Sender {
+        private final SseEmitter emitter;
+        private volatile boolean gone;
+
+        Sender(SseEmitter emitter) {
+            this.emitter = emitter;
+            emitter.onError(e -> gone = true);
+            emitter.onTimeout(() -> gone = true);
+        }
+
+        void event(String name, Object data) {
+            if (gone) return;
+            try {
+                emitter.send(SseEmitter.event().name(name).data(data, MediaType.APPLICATION_JSON));
+            } catch (IOException | IllegalStateException e) {
+                gone = true;
+            }
+        }
+    }
+
     @Operation(summary = "Xóa hội thoại của tôi")
     @DeleteMapping("/api/v1/ai/conversations/{id}")
     public ApiResponse<Void> delete(@PathVariable UUID id) {
         assistant.delete(id);
         return ApiResponse.success(null);
+    }
+
+    // ---- health-aware suggestions (students) ----
+
+    @Operation(summary = "Học viên đã cho trợ lý dùng 3 mục có/không của hồ sơ sức khỏe để gợi ý video hay chưa")
+    @GetMapping("/api/v1/ai/health-consent")
+    public ApiResponse<HealthConsentService.Consent> healthConsent() {
+        return ApiResponse.success(consents.mine());
+    }
+
+    @Operation(summary = "Bật/tắt cho trợ lý dùng hồ sơ sức khỏe (chấn thương, tim/huyết áp, mang thai) để gợi ý video")
+    @PutMapping("/api/v1/ai/health-consent")
+    public ApiResponse<HealthConsentService.Consent> setHealthConsent(@Valid @RequestBody ConsentReq req) {
+        return ApiResponse.success(consents.set(req.consented()));
     }
 }

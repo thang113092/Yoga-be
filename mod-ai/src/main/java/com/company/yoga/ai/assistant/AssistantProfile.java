@@ -31,5 +31,6 @@ public interface AssistantProfile {
     /** First line of each question: today's date and who is asking. Not in the system prompt, to keep it cacheable. */
     String context(Caller caller);
 
-    List<AiTool> tools();
+    /** Tools for this caller (staff tools depend on the role). */
+    List<AiTool> tools(Caller caller);
 }

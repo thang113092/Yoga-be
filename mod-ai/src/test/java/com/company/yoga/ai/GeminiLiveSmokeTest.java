@@ -136,4 +136,49 @@ class GeminiLiveSmokeTest {
         assertThat(proposed).isEqualTo("s-1800");
         assertThat(answer).isNotBlank().contains("Đặt chỗ");
     }
+
+    /** Streaming with tools and the staff prompt: a call round, then the answer arrives in several pieces. */
+    @Test
+    void realGeminiStreamsAStaffAnswer() {
+        var props = new AiProperties(true, "gemini",
+                new AiProperties.Gemini(System.getenv("GEMINI_SMOKE_KEY"), "https://generativelanguage.googleapis.com/v1beta", 60, 1),
+                java.util.Map.of(), new AiProperties.Quota(30, 100, BigDecimal.ONE, 80), new AiProperties.Conversations(30, 60));
+        var gemini = new GeminiProvider(props);
+        String model = System.getenv().getOrDefault("GEMINI_SMOKE_CHAT_MODEL", System.getenv("GEMINI_SMOKE_MODEL"));
+        var roster = new AiProvider.ToolSpec("get_class_roster", "Danh sách học viên đã đặt một buổi lớp",
+                java.util.Map.of("type", "object", "properties", java.util.Map.of("scheduleId", java.util.Map.of("type", "string")),
+                        "required", List.of("scheduleId")));
+        var schedule = new AiProvider.ToolSpec("get_my_teaching_schedule", "Lịch dạy của huấn luyện viên",
+                java.util.Map.of("type", "object", "properties", java.util.Map.of("fromDate", java.util.Map.of("type", "string")),
+                        "required", List.of("fromDate")));
+        java.util.Map<String, java.util.Map<String, Object>> fake = java.util.Map.of(
+                "get_my_teaching_schedule", java.util.Map.of("classes", List.of(java.util.Map.of("scheduleId", "s-18", "className", "Hatha",
+                        "startAt", "thứ Năm 26/11/2026 18:00", "booked", 3, "capacity", 12))),
+                "get_class_roster", java.util.Map.of("total", 3, "attendees", List.of(
+                        java.util.Map.of("name", "Nguyễn Lan", "phoneEnding", "***123", "status", "CONFIRMED"),
+                        java.util.Map.of("name", "Trần Minh", "phoneEnding", "***456", "status", "CONFIRMED"),
+                        java.util.Map.of("name", "Lê Hoa", "phoneEnding", "***789", "status", "ATTENDED"))));
+        String system = Prompts.load("staff-assistant").text();
+        var history = new java.util.ArrayList<AiProvider.Turn>();
+        history.add(AiProvider.Turn.user("[Ngữ cảnh: hôm nay là thứ Năm 26/11/2026 (2026-11-26), giờ Việt Nam; người hỏi là huấn luyện viên]\n"
+                + "Lớp tối nay của tôi có những ai?"));
+        var pieces = new java.util.ArrayList<String>();
+        String answer = null;
+        for (int round = 0; round < 5 && answer == null; round++) {
+            var r = gemini.chatStream(new AiProvider.ChatRequest(model, system, List.copyOf(history), List.of(schedule, roster), round < 4,
+                    2048, null, null), pieces::add);
+            history.add(r.turn());
+            System.out.println("SMOKE staff round " + round + ": calls=" + r.turn().calls());
+            if (r.turn().calls().isEmpty()) {
+                answer = r.turn().text();
+                break;
+            }
+            var results = new java.util.ArrayList<AiProvider.ToolResult>();
+            for (var c : r.turn().calls()) results.add(new AiProvider.ToolResult(c.id(), c.name(), fake.getOrDefault(c.name(), java.util.Map.of())));
+            history.add(AiProvider.Turn.tool(results));
+        }
+        System.out.println("SMOKE staff answer (" + pieces.size() + " pieces): " + answer);
+        assertThat(answer).contains("Nguyễn Lan").contains("Lê Hoa");
+        assertThat(String.join("", pieces)).endsWith(answer);
+    }
 }

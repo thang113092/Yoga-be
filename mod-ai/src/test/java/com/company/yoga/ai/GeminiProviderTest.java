@@ -202,4 +202,48 @@ class GeminiProviderTest {
         assertThatThrownBy(() -> gemini.chat(new AiProvider.ChatRequest("test-model", "s", List.of(AiProvider.Turn.user("q")), List.of(REVENUE), true, 512, null, null)))
                 .isInstanceOfSatisfying(ProviderException.class, e -> assertThat(e.failure()).isEqualTo(Failure.BAD_RESPONSE));
     }
+
+    // ---------------------------------------------------------------- streaming
+
+    @Test
+    void streamPassesTextPiecesAndKeepsEveryRawPart() throws Exception {
+        String sse = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Doanh thu \"}]}}]}\r\n\r\n"
+                + "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"là 5 triệu\",\"thoughtSignature\":\"s1\"}]},"
+                + "\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":40,\"candidatesTokenCount\":6}}\r\n\r\n";
+        var pieces = new ArrayList<String>();
+        var result = GeminiProvider.readStream("m", new java.io.BufferedReader(new java.io.StringReader(sse)), pieces::add);
+        assertThat(pieces).containsExactly("Doanh thu ", "là 5 triệu");
+        assertThat(result.turn().text()).isEqualTo("Doanh thu là 5 triệu");
+        assertThat(result.turn().raw().toString()).contains("\"thoughtSignature\":\"s1\"");
+        assertThat(result.usage()).isEqualTo(new AiProvider.Usage(40, 0, 6));
+    }
+
+    @Test
+    void streamReturnsCallsAndRejectsBlockedAnswers() throws Exception {
+        String calls = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"list_branches\",\"args\":{}},"
+                + "\"thoughtSignature\":\"x\"}]},\"finishReason\":\"STOP\"}]}\n\n";
+        var result = GeminiProvider.readStream("m", new java.io.BufferedReader(new java.io.StringReader(calls)), t -> { });
+        assertThat(result.turn().calls()).extracting(AiProvider.ToolCall::name).containsExactly("list_branches");
+
+        String blocked = "data: {\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}\n\n";
+        assertThatThrownBy(() -> GeminiProvider.readStream("m", new java.io.BufferedReader(new java.io.StringReader(blocked)), t -> { }))
+                .isInstanceOfSatisfying(ProviderException.class, e -> assertThat(e.failure()).isEqualTo(Failure.BLOCKED));
+        String cut = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"a\"}]},\"finishReason\":\"MAX_TOKENS\"}]}\n\n";
+        assertThatThrownBy(() -> GeminiProvider.readStream("m", new java.io.BufferedReader(new java.io.StringReader(cut)), t -> { }))
+                .isInstanceOfSatisfying(ProviderException.class, e -> assertThat(e.failure()).isEqualTo(Failure.TRUNCATED));
+    }
+
+    @Test
+    void streamUsesTheSseEndpoint() {
+        server.expect(requestTo("https://gemini.test/v1beta/models/test-model:streamGenerateContent?alt=sse"))
+                .andExpect(header("x-goog-api-key", "key-1"))
+                .andRespond(withSuccess("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Xin chào\"}]},\"finishReason\":\"STOP\"}]}\n\n",
+                        MediaType.TEXT_EVENT_STREAM));
+        var pieces = new ArrayList<String>();
+        var r = gemini.chatStream(new AiProvider.ChatRequest("test-model", "s", List.of(AiProvider.Turn.user("q")), List.of(), true, 256, null, null),
+                pieces::add);
+        assertThat(pieces).containsExactly("Xin chào");
+        assertThat(r.turn().text()).isEqualTo("Xin chào");
+        server.verify();
+    }
 }

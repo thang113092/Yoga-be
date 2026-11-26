@@ -133,6 +133,127 @@ public class GeminiProvider implements AiProvider {
         return new ChatResult(new Turn(Role.MODEL, text.toString(), calls, List.of(), parts.deepCopy()), finish, usage);
     }
 
+    /**
+     * {@code streamGenerateContent?alt=sse}. Every received part is kept in {@code raw} exactly as sent (text pieces,
+     * thoughts, calls, signatures), so the turn replays unchanged. Retries only while nothing was shown to the user.
+     */
+    @Override
+    public ChatResult chatStream(ChatRequest request, java.util.function.Consumer<String> onText) {
+        if (!isConfigured()) throw new ProviderException(Failure.REJECTED, "Gemini API key is not configured", null);
+        Map<String, Object> body = body(request);
+        for (int attempt = 0; ; attempt++) {
+            boolean[] emitted = {false};
+            try {
+                return streamOnce(request.model(), body, t -> {
+                    emitted[0] = true;
+                    onText.accept(t);
+                });
+            } catch (ProviderException e) {
+                if (!e.retryable() || emitted[0] || attempt >= maxRetries) throw e;
+                log.warn("Gemini stream {} ({}), retry {}/{}", request.model(), e.failure(), attempt + 1, maxRetries);
+                try {
+                    sleeper.sleep(Duration.ofMillis(800L * (attempt + 1)));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+    }
+
+    private ChatResult streamOnce(String model, Map<String, Object> body, java.util.function.Consumer<String> onText) {
+        try {
+            return api.post().uri("/models/{model}:streamGenerateContent?alt=sse", model)
+                    .header("x-goog-api-key", apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.TEXT_EVENT_STREAM)
+                    .body(body)
+                    .exchange((req, res) -> {
+                        int status = res.getStatusCode().value();
+                        if (status >= 400) {
+                            String error = new String(res.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                            Failure failure = status == 429 ? Failure.RATE_LIMITED : status >= 500 ? Failure.UNAVAILABLE : Failure.REJECTED;
+                            if (failure == Failure.REJECTED) {
+                                log.error("Gemini rejected the stream for model {}: HTTP {} {}", model, status, abbreviate(error));
+                            }
+                            throw new ProviderException(failure, "Gemini HTTP " + status, null);
+                        }
+                        try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(res.getBody(),
+                                java.nio.charset.StandardCharsets.UTF_8))) {
+                            return readStream(model, reader, onText);
+                        }
+                    });
+        } catch (ResourceAccessException e) {
+            throw new ProviderException(Failure.UNAVAILABLE, "Gemini unreachable: " + e.getMessage(), null);
+        }
+    }
+
+    /** Reads Server-Sent Events ({@code data: {...}} blocks), each a partial generateContent response. */
+    static ChatResult readStream(String model, java.io.BufferedReader reader, java.util.function.Consumer<String> onText)
+            throws java.io.IOException {
+        var raw = JSON.createArrayNode();
+        StringBuilder text = new StringBuilder();
+        List<ToolCall> calls = new ArrayList<>();
+        String finish = "";
+        JsonNode usageNode = null;
+        String blockReason = "";
+        boolean sawCandidate = false;
+        StringBuilder data = new StringBuilder();
+        String line;
+        List<JsonNode> chunks = new ArrayList<>();
+        while (true) {
+            line = reader.readLine();
+            if (line == null || line.isEmpty()) {
+                if (!data.isEmpty()) {
+                    JsonNode chunk = JSON.readTree(data.toString());
+                    data.setLength(0);
+                    chunks.add(chunk);
+                    if (chunk.has("usageMetadata")) usageNode = chunk.get("usageMetadata");
+                    String block = chunk.path("promptFeedback").path("blockReason").asText("");
+                    if (!block.isEmpty()) blockReason = block;
+                    JsonNode candidate = chunk.path("candidates").path(0);
+                    if (!candidate.isMissingNode()) {
+                        sawCandidate = true;
+                        if (candidate.hasNonNull("finishReason")) finish = candidate.get("finishReason").asText("");
+                        for (JsonNode part : candidate.path("content").path("parts")) {
+                            raw.add(part.deepCopy());
+                            if (part.has("functionCall")) {
+                                JsonNode call = part.get("functionCall");
+                                Map<String, Object> args = call.hasNonNull("args") ? JSON.convertValue(call.get("args"), MAP) : Map.of();
+                                calls.add(new ToolCall(call.path("id").asText(null), call.path("name").asText(""), args));
+                            } else if (!part.path("thought").asBoolean(false)) {
+                                String piece = part.path("text").asText("");
+                                if (!piece.isEmpty()) {
+                                    text.append(piece);
+                                    onText.accept(piece);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (line == null) break;
+                continue;
+            }
+            if (line.startsWith("data:")) data.append(line.substring(5).trim());
+        }
+        var meta = usageNode == null ? JSON.createObjectNode() : usageNode;
+        Usage usage = new Usage(meta.path("promptTokenCount").asLong(), meta.path("cachedContentTokenCount").asLong(),
+                meta.path("candidatesTokenCount").asLong() + meta.path("thoughtsTokenCount").asLong());
+        if (!sawCandidate) {
+            log.warn("Gemini stream {} returned no answer (block reason {})", model, blockReason.isEmpty() ? "-" : blockReason);
+            throw new ProviderException(blockReason.isEmpty() ? Failure.BAD_RESPONSE : Failure.BLOCKED, "No candidate", usage);
+        }
+        log.info("Gemini {} (stream): finish={} in={} cached={} out={} chunks={}", model, finish, usage.inputTokens(),
+                usage.cachedTokens(), usage.outputTokens(), chunks.size());
+        if (BLOCKING.contains(finish)) throw new ProviderException(Failure.BLOCKED, "Finish reason " + finish, usage);
+        if ("MAX_TOKENS".equals(finish)) throw new ProviderException(Failure.TRUNCATED, "Answer cut at max output tokens", usage);
+        if (BAD_CALL.contains(finish)) throw new ProviderException(Failure.BAD_RESPONSE, "Finish reason " + finish, usage);
+        if (calls.isEmpty() && text.isEmpty()) {
+            throw new ProviderException(Failure.BAD_RESPONSE, "Turn without text or call (finish " + finish + ")", usage);
+        }
+        return new ChatResult(new Turn(Role.MODEL, text.toString(), calls, List.of(), raw), finish, usage);
+    }
+
     static Map<String, Object> body(ChatRequest request) {
         List<Map<String, Object>> contents = new ArrayList<>();
         for (Turn turn : request.history()) contents.add(content(turn));

@@ -52,6 +52,9 @@ class AssistantServiceTest {
     private final AiUsageService usage = mock(AiUsageService.class);
     private final ManagerReportTools reports = mock(ManagerReportTools.class);
     private final StudentTools studentTools = mock(StudentTools.class);
+    private final StaffTools staffTools = mock(StaffTools.class);
+    private final HealthTools healthTools = mock(HealthTools.class);
+    private final HealthConsentService consents = mock(HealthConsentService.class);
     private final AccessPolicy access = mock(AccessPolicy.class);
     private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
@@ -71,7 +74,7 @@ class AssistantServiceTest {
 
     private static AiProperties props(boolean enabled) {
         return new AiProperties(enabled, "gemini", new AiProperties.Gemini("k", "u", 60, 0),
-                Map.of(AiProperties.MANAGER_CHAT, FEATURE, AiProperties.STUDENT_CHAT, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80),
+                Map.of(AiProperties.MANAGER_CHAT, FEATURE, AiProperties.STUDENT_CHAT, FEATURE, AiProperties.STAFF_CHAT, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80),
                 new AiProperties.Conversations(30, 60));
     }
 
@@ -95,7 +98,8 @@ class AssistantServiceTest {
 
     private AssistantService service(boolean enabled) {
         return new AssistantService(props(enabled), provider, usage, new Prompts(),
-                List.of(new ManagerProfile(reports), new StudentProfile(studentTools, jdbc)), access, jdbc, tx, new ObjectMapper());
+                List.of(new ManagerProfile(reports), new StudentProfile(studentTools, healthTools, consents, jdbc),
+                        new StaffProfile(staffTools, jdbc)), access, jdbc, tx, new ObjectMapper());
     }
 
     private void signedInAs(String role) {
@@ -222,7 +226,7 @@ class AssistantServiceTest {
     @Test
     void promptFilesLoad() {
         assertThat(new Prompts().get(ManagerProfile.PROMPT).version()).isEqualTo("manager-assistant/1");
-        assertThat(new Prompts().get(StudentProfile.PROMPT).version()).isEqualTo("student-assistant/1");
+        assertThat(new Prompts().get(StudentProfile.PROMPT).version()).isEqualTo("student-assistant/3");
         verify(provider, times(0)).chat(any());
     }
 
@@ -259,12 +263,80 @@ class AssistantServiceTest {
     }
 
     @Test
-    void receptionistsAndInstructorsHaveNoAssistant() {
+    void receptionistsAndInstructorsGetTheStaffAssistant() {
         signedInAs("RECEPTIONIST");
+        when(staffTools.tools(any())).thenAnswer(i -> List.of(revenueTool));
+        when(provider.chat(any())).thenReturn(answer("Lớp 18:00 có 8 học viên."));
+        service.ask(CONVERSATION, "Lớp 18:00 hôm nay bao nhiêu người?");
+        verify(jdbc).queryForList(anyString(), argThat((SqlParameterSource p) -> p instanceof MapSqlParameterSource m
+                && "STAFF_ASSISTANT".equals(m.getValue("kind"))), eq(String.class));
+        verify(usage).checkQuota(ME, true);
+    }
+
+    @Test
+    void otherRolesHaveNoAssistant() {
+        signedInAs("ACCOUNTANT");
         assertThatThrownBy(() -> service.ask(CONVERSATION, "Doanh thu?")).isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
-        signedInAs("INSTRUCTOR");
-        assertThatThrownBy(service::conversations).isInstanceOf(BusinessException.class);
+        verify(provider, never()).chat(any());
+    }
+
+    @Test
+    void healthToolsOnlyWithConsent() {
+        signedInAs("STUDENT");
+        AiTool healthTool = new AiTool() {
+            public AiProvider.ToolSpec spec() {
+                return new AiProvider.ToolSpec("recommend_videos_for_me", "Video", Map.of("type", "object"));
+            }
+
+            public Map<String, Object> run(Map<String, Object> args) {
+                return Map.of();
+            }
+        };
+        when(healthTools.tools()).thenReturn(List.of(healthTool));
+        var requests = ArgumentCaptor.forClass(AiProvider.ChatRequest.class);
+        when(provider.chat(requests.capture())).thenReturn(answer("ok"));
+
+        when(consents.consented(ME)).thenReturn(false);
+        service.ask(CONVERSATION, "Bài nào hợp với tôi?");
+        when(consents.consented(ME)).thenReturn(true);
+        service.ask(CONVERSATION, "Bài nào hợp với tôi?");
+
+        assertThat(requests.getAllValues().get(0).tools()).extracting(AiProvider.ToolSpec::name).doesNotContain("recommend_videos_for_me");
+        assertThat(requests.getAllValues().get(1).tools()).extracting(AiProvider.ToolSpec::name).contains("recommend_videos_for_me");
+    }
+
+    @Test
+    void streamingPassesTextResetsPreamblesAndAnnouncesTools() {
+        var events = new ArrayList<String>();
+        when(provider.chatStream(any(), any())).thenAnswer(i -> {
+            java.util.function.Consumer<String> onText = i.getArgument(1);
+            onText.accept("Để mình tra...");
+            return new AiProvider.ChatResult(new Turn(Role.MODEL, "Để mình tra...", List.of(new ToolCall("c1", "get_revenue_report", Map.of())),
+                    List.of(), null), "STOP", AiProvider.Usage.NONE);
+        }).thenAnswer(i -> {
+            java.util.function.Consumer<String> onText = i.getArgument(1);
+            onText.accept("Doanh thu là ");
+            onText.accept("**1.000.000 đ**.");
+            return answer("Doanh thu là **1.000.000 đ**.");
+        });
+
+        var a = service.ask(CONVERSATION, "Doanh thu?", new AssistantService.Listener() {
+            public void onText(String delta) {
+                events.add("text:" + delta);
+            }
+
+            public void onReset() {
+                events.add("reset");
+            }
+
+            public void onTool(String name) {
+                events.add("tool:" + name);
+            }
+        });
+
+        assertThat(events).containsExactly("text:Để mình tra...", "reset", "tool:get_revenue_report", "text:Doanh thu là ", "text:**1.000.000 đ**.");
+        assertThat(a.message().text()).isEqualTo("Doanh thu là **1.000.000 đ**.");
         verify(provider, never()).chat(any());
     }
 }

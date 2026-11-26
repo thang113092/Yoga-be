@@ -15,10 +15,14 @@ public class StudentProfile implements AssistantProfile {
     static final String PROMPT = "student-assistant";
 
     private final StudentTools tools;
+    private final HealthTools health;
+    private final HealthConsentService consents;
     private final NamedParameterJdbcTemplate jdbc;
 
-    public StudentProfile(StudentTools tools, NamedParameterJdbcTemplate jdbc) {
+    public StudentProfile(StudentTools tools, HealthTools health, HealthConsentService consents, NamedParameterJdbcTemplate jdbc) {
         this.tools = tools;
+        this.health = health;
+        this.consents = consents;
         this.jdbc = jdbc;
     }
 
@@ -58,7 +62,11 @@ public class StudentProfile implements AssistantProfile {
     }
 
     @Override
-    public List<AiTool> tools() {
-        return tools.tools();
+    /** Health tools are offered only while the student consents; otherwise the model cannot read the profile at all. */
+    public List<AiTool> tools(Caller caller) {
+        if (!consents.consented(caller.userId())) return tools.tools();
+        List<AiTool> all = new java.util.ArrayList<>(tools.tools());
+        all.addAll(health.tools());
+        return all;
     }
 }

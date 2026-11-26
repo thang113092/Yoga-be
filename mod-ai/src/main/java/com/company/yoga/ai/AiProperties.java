@@ -22,7 +22,8 @@ public record AiProperties(
     public static final String VIDEO_TAGGING = "video-tagging";
     public static final String MANAGER_CHAT = "manager-chat";
     public static final String STUDENT_CHAT = "student-chat";
-    private static final java.util.Set<String> KNOWN = java.util.Set.of(VIDEO_TAGGING, MANAGER_CHAT, STUDENT_CHAT);
+    public static final String STAFF_CHAT = "staff-chat";
+    private static final java.util.Set<String> KNOWN = java.util.Set.of(VIDEO_TAGGING, MANAGER_CHAT, STUDENT_CHAT, STAFF_CHAT);
 
     public record Gemini(
             @DefaultValue("") String apiKey,

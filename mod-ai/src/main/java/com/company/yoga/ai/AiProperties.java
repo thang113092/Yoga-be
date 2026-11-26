@@ -21,7 +21,8 @@ public record AiProperties(
     /** Feature keys used in code; the configuration may only add these. */
     public static final String VIDEO_TAGGING = "video-tagging";
     public static final String MANAGER_CHAT = "manager-chat";
-    private static final java.util.Set<String> KNOWN = java.util.Set.of(VIDEO_TAGGING, MANAGER_CHAT);
+    public static final String STUDENT_CHAT = "student-chat";
+    private static final java.util.Set<String> KNOWN = java.util.Set.of(VIDEO_TAGGING, MANAGER_CHAT, STUDENT_CHAT);
 
     public record Gemini(
             @DefaultValue("") String apiKey,

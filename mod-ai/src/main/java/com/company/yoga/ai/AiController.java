@@ -1,6 +1,6 @@
 package com.company.yoga.ai;
 
-import com.company.yoga.ai.assistant.ManagerAssistantService;
+import com.company.yoga.ai.assistant.AssistantService;
 import com.company.yoga.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,15 +18,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "AI", description = "Tính năng AI (Gemini): gợi ý chủ đề video, trợ lý số liệu cho quản lý")
+@Tag(name = "AI", description = "Tính năng AI (Gemini): gợi ý chủ đề video, trợ lý số liệu cho quản lý, trợ lý cho học viên")
 @RestController
 @RequiredArgsConstructor
 public class AiController {
 
     private final VideoTaggingService tagging;
-    private final ManagerAssistantService assistant;
+    private final AssistantService assistant;
 
-    public record Status(boolean videoTagging, boolean managerChat) {
+    public record Status(boolean videoTagging, boolean managerChat, boolean studentChat) {
     }
 
     public record ReviewReq(
@@ -38,13 +38,13 @@ public class AiController {
     }
 
     public record AskReq(@NotBlank(message = "Vui lòng nhập câu hỏi")
-                         @Size(max = ManagerAssistantService.MAX_QUESTION, message = "Câu hỏi tối đa 2000 ký tự") String text) {
+                         @Size(max = AssistantService.MAX_QUESTION, message = "Câu hỏi tối đa 2000 ký tự") String text) {
     }
 
     @Operation(summary = "Tính năng AI nào đang bật (để giao diện ẩn/hiện nút)")
     @GetMapping("/api/v1/ai/status")
     public ApiResponse<Status> status() {
-        return ApiResponse.success(new Status(tagging.available(), assistant.available()));
+        return ApiResponse.success(new Status(tagging.available(), assistant.available(AiProperties.MANAGER_CHAT), assistant.available(AiProperties.STUDENT_CHAT)));
     }
 
     // ---- video tag suggestions ----
@@ -65,27 +65,27 @@ public class AiController {
 
     // ---- manager assistant ----
 
-    @Operation(summary = "Hội thoại trợ lý số liệu của tôi (mới nhất trước)")
+    @Operation(summary = "Hội thoại với trợ lý của tôi (quản lý: trợ lý số liệu; học viên: trợ lý học viên), mới nhất trước")
     @GetMapping("/api/v1/ai/conversations")
-    public ApiResponse<List<ManagerAssistantService.Conversation>> conversations() {
+    public ApiResponse<List<AssistantService.Conversation>> conversations() {
         return ApiResponse.success(assistant.conversations());
     }
 
-    @Operation(summary = "Bắt đầu hội thoại mới với trợ lý số liệu")
+    @Operation(summary = "Bắt đầu hội thoại mới với trợ lý")
     @PostMapping("/api/v1/ai/conversations")
-    public ApiResponse<ManagerAssistantService.Conversation> create() {
+    public ApiResponse<AssistantService.Conversation> create() {
         return ApiResponse.success(assistant.create());
     }
 
     @Operation(summary = "Câu hỏi và câu trả lời của một hội thoại")
     @GetMapping("/api/v1/ai/conversations/{id}/messages")
-    public ApiResponse<List<ManagerAssistantService.Message>> messages(@PathVariable UUID id) {
+    public ApiResponse<List<AssistantService.Message>> messages(@PathVariable UUID id) {
         return ApiResponse.success(assistant.messages(id));
     }
 
-    @Operation(summary = "Hỏi trợ lý; trả về câu trả lời khi trợ lý đã tra xong số liệu")
+    @Operation(summary = "Hỏi trợ lý; trả về câu trả lời khi trợ lý đã tra xong (kèm nút đề xuất, ví dụ đặt chỗ)")
     @PostMapping("/api/v1/ai/conversations/{id}/messages")
-    public ApiResponse<ManagerAssistantService.Answer> ask(@PathVariable UUID id, @Valid @RequestBody AskReq req) {
+    public ApiResponse<AssistantService.Answer> ask(@PathVariable UUID id, @Valid @RequestBody AskReq req) {
         return ApiResponse.success(assistant.ask(id, req.text()));
     }
 

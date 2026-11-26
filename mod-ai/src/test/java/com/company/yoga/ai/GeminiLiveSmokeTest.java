@@ -78,4 +78,62 @@ class GeminiLiveSmokeTest {
         assertThat(second.turn().calls()).isEmpty();
         assertThat(second.turn().text()).contains("125.400.000");
     }
+
+    /**
+     * Student prompt with made-up classes: the model must look up the branch, search classes and propose (not book)
+     * the earliest Hatha class, then tell the student to press the button.
+     */
+    @Test
+    void realGeminiProposesABookingForAStudent() {
+        var props = new AiProperties(true, "gemini",
+                new AiProperties.Gemini(System.getenv("GEMINI_SMOKE_KEY"), "https://generativelanguage.googleapis.com/v1beta", 60, 1),
+                java.util.Map.of(), new AiProperties.Quota(30, 100, BigDecimal.ONE, 80), new AiProperties.Conversations(30, 60));
+        var gemini = new GeminiProvider(props);
+        String model = System.getenv().getOrDefault("GEMINI_SMOKE_CHAT_MODEL", System.getenv("GEMINI_SMOKE_MODEL"));
+        java.util.Map<String, Object> obj = java.util.Map.of("type", "object");
+        var specs = List.of(
+                new AiProvider.ToolSpec("list_branches", "Các chi nhánh (id, tên)", null),
+                new AiProvider.ToolSpec("search_classes", "Tìm buổi lớp sắp diễn ra theo ngày, chi nhánh, bộ môn",
+                        java.util.Map.of("type", "object", "properties", java.util.Map.of(
+                                "fromDate", java.util.Map.of("type", "string", "description", "YYYY-MM-DD"),
+                                "branchId", java.util.Map.of("type", "string"), "classType", java.util.Map.of("type", "string")),
+                                "required", List.of("fromDate"))),
+                new AiProvider.ToolSpec("get_my_passes", "Thẻ tập của học viên", null),
+                new AiProvider.ToolSpec("propose_booking", "Hiện nút Đặt chỗ cho một buổi; KHÔNG đặt chỗ",
+                        java.util.Map.of("type", "object", "properties", java.util.Map.of("scheduleId", java.util.Map.of("type", "string")),
+                                "required", List.of("scheduleId"))));
+        java.util.Map<String, java.util.Map<String, Object>> fake = java.util.Map.of(
+                "list_branches", java.util.Map.of("branches", List.of(java.util.Map.of("id", "b-cg", "name", "Cầu Giấy"),
+                        java.util.Map.of("id", "b-q1", "name", "Quận 1"))),
+                "search_classes", java.util.Map.of("classes", List.of(
+                        java.util.Map.of("scheduleId", "s-1930", "className", "Hatha cơ bản", "branch", "Cầu Giấy", "startAt", "thứ Năm 26/11/2026 19:30", "seatsLeft", 2),
+                        java.util.Map.of("scheduleId", "s-1800", "className", "Hatha cơ bản", "branch", "Cầu Giấy", "startAt", "thứ Năm 26/11/2026 18:00", "seatsLeft", 5))),
+                "get_my_passes", java.util.Map.of("passes", List.of(java.util.Map.of("plan", "Thẻ 1 tháng", "status", "ACTIVE",
+                        "remainingSessions", "không giới hạn", "branches", "Tất cả chi nhánh", "access", "IN_PERSON"))),
+                "propose_booking", java.util.Map.of("ok", true, "note", "Đã hiện nút Đặt chỗ; chưa đặt chỗ."));
+        String system = Prompts.load("student-assistant").text();
+        var history = new java.util.ArrayList<AiProvider.Turn>();
+        history.add(AiProvider.Turn.user("[Ngữ cảnh: hôm nay là thứ Năm 26/11/2026 (2026-11-26), giờ Việt Nam; người hỏi là học viên]\n"
+                + "Tối nay ở Cầu Giấy có lớp Hatha không? Đặt giúp mình lớp sớm nhất nhé."));
+        String proposed = null;
+        String answer = null;
+        for (int round = 0; round < 6 && answer == null; round++) {
+            var r = gemini.chat(new AiProvider.ChatRequest(model, system, List.copyOf(history), specs, round < 5, 2048, null, null));
+            history.add(r.turn());
+            System.out.println("SMOKE student round " + round + ": calls=" + r.turn().calls() + " usage=" + r.usage());
+            if (r.turn().calls().isEmpty()) {
+                answer = r.turn().text();
+                break;
+            }
+            var results = new java.util.ArrayList<AiProvider.ToolResult>();
+            for (var c : r.turn().calls()) {
+                if ("propose_booking".equals(c.name())) proposed = String.valueOf(c.args().get("scheduleId"));
+                results.add(new AiProvider.ToolResult(c.id(), c.name(), fake.getOrDefault(c.name(), java.util.Map.of("error", "không có hàm"))));
+            }
+            history.add(AiProvider.Turn.tool(results));
+        }
+        System.out.println("SMOKE student answer: " + answer);
+        assertThat(proposed).isEqualTo("s-1800");
+        assertThat(answer).isNotBlank().contains("Đặt chỗ");
+    }
 }

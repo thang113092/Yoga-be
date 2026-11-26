@@ -22,6 +22,8 @@ import com.company.yoga.ai.AiUsageService;
 import com.company.yoga.ai.Prompts;
 import com.company.yoga.common.exception.BusinessException;
 import com.company.yoga.common.api.CommonErrorCode;
+import com.company.yoga.identity.account.entity.UserEntity;
+import com.company.yoga.identity.account.service.AccessPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -39,7 +41,7 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
-class ManagerAssistantServiceTest {
+class AssistantServiceTest {
 
     private static final UUID ME = UUID.randomUUID();
     private static final UUID CONVERSATION = UUID.randomUUID();
@@ -49,10 +51,12 @@ class ManagerAssistantServiceTest {
     private final AiProvider provider = mock(AiProvider.class);
     private final AiUsageService usage = mock(AiUsageService.class);
     private final ManagerReportTools reports = mock(ManagerReportTools.class);
+    private final StudentTools studentTools = mock(StudentTools.class);
+    private final AccessPolicy access = mock(AccessPolicy.class);
     private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
     private final List<Map<String, Object>> toolArgs = new ArrayList<>();
-    private ManagerAssistantService service;
+    private AssistantService service;
 
     private AiTool revenueTool = new AiTool() {
         public AiProvider.ToolSpec spec() {
@@ -67,7 +71,7 @@ class ManagerAssistantServiceTest {
 
     private static AiProperties props(boolean enabled) {
         return new AiProperties(enabled, "gemini", new AiProperties.Gemini("k", "u", 60, 0),
-                Map.of(AiProperties.MANAGER_CHAT, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80),
+                Map.of(AiProperties.MANAGER_CHAT, FEATURE, AiProperties.STUDENT_CHAT, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80),
                 new AiProperties.Conversations(30, 60));
     }
 
@@ -76,8 +80,9 @@ class ManagerAssistantServiceTest {
     void setUp() {
         when(provider.isConfigured()).thenReturn(true);
         when(provider.name()).thenReturn("gemini");
-        when(reports.scope()).thenReturn(new ManagerReportTools.Scope(ME, null, true));
+        signedInAs("SUPER_ADMIN");
         when(reports.tools()).thenAnswer(i -> List.of(revenueTool));
+        when(studentTools.tools()).thenAnswer(i -> List.of(revenueTool));
         when(jdbc.queryForList(anyString(), any(SqlParameterSource.class), eq(String.class))).thenReturn(List.of("Hội thoại mới"));
         when(jdbc.query(anyString(), any(SqlParameterSource.class), any(RowMapper.class))).thenReturn(List.of());
         when(jdbc.update(anyString(), any(SqlParameterSource.class))).thenReturn(1);
@@ -85,7 +90,19 @@ class ManagerAssistantServiceTest {
             ((Consumer<TransactionStatus>) i.getArgument(0)).accept(null);
             return null;
         }).when(tx).executeWithoutResult(any());
-        service = new ManagerAssistantService(props(true), provider, usage, new Prompts(), reports, jdbc, tx, new ObjectMapper());
+        service = service(true);
+    }
+
+    private AssistantService service(boolean enabled) {
+        return new AssistantService(props(enabled), provider, usage, new Prompts(),
+                List.of(new ManagerProfile(reports), new StudentProfile(studentTools, jdbc)), access, jdbc, tx, new ObjectMapper());
+    }
+
+    private void signedInAs(String role) {
+        UserEntity user = new UserEntity();
+        user.setId(ME);
+        when(access.actor()).thenReturn(user);
+        when(access.role(user)).thenReturn(role);
     }
 
     private static AiProvider.ChatResult answer(String text) {
@@ -188,7 +205,7 @@ class ManagerAssistantServiceTest {
 
     @Test
     void offAndEmptyQuestionsAreRefusedBeforeAnyCall() {
-        var off = new ManagerAssistantService(props(false), provider, usage, new Prompts(), reports, jdbc, tx, new ObjectMapper());
+        var off = service(false);
         assertThatThrownBy(() -> off.ask(CONVERSATION, "Doanh thu?")).isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(AiResultCodes.DISABLED));
         assertThatThrownBy(() -> service.ask(CONVERSATION, "   ")).isInstanceOf(BusinessException.class);
@@ -198,13 +215,56 @@ class ManagerAssistantServiceTest {
 
     @Test
     void longQuestionsMakeShortTitles() {
-        assertThat(ManagerAssistantService.title("So sánh   doanh thu\n" + "x".repeat(100))).hasSize(60).endsWith("…");
-        assertThat(ManagerAssistantService.context(new ManagerReportTools.Scope(ME, null, false))).contains("quản lý chi nhánh");
+        assertThat(AssistantService.title("So sánh   doanh thu\n" + "x".repeat(100))).hasSize(60).endsWith("…");
+        assertThat(new ManagerProfile(reports).context(new AssistantProfile.Caller(ME, "BRANCH_MANAGER", null))).contains("quản lý chi nhánh");
     }
 
     @Test
-    void promptFileLoads() {
-        assertThat(new Prompts().get(ManagerAssistantService.PROMPT).version()).isEqualTo("manager-assistant/1");
+    void promptFilesLoad() {
+        assertThat(new Prompts().get(ManagerProfile.PROMPT).version()).isEqualTo("manager-assistant/1");
+        assertThat(new Prompts().get(StudentProfile.PROMPT).version()).isEqualTo("student-assistant/1");
         verify(provider, times(0)).chat(any());
+    }
+
+    @Test
+    void studentsGetTheirOwnAssistantQuotaAndButtons() {
+        signedInAs("STUDENT");
+        revenueTool = new AiTool() {
+            public AiProvider.ToolSpec spec() {
+                return new AiProvider.ToolSpec("propose_booking", "Đề xuất", Map.of("type", "object"));
+            }
+
+            public Map<String, Object> run(Map<String, Object> args) {
+                return Map.of("ok", true, AssistantService.ACTION, Map.of("type", "BOOK_CLASS", "scheduleId", "s1", "label", "Hatha"));
+            }
+        };
+        var requests = ArgumentCaptor.forClass(AiProvider.ChatRequest.class);
+        when(provider.chat(requests.capture())).thenReturn(call("propose_booking", Map.of("scheduleId", "s1")))
+                .thenReturn(answer("Bạn bấm nút Đặt chỗ bên dưới nhé."));
+
+        var a = service.ask(CONVERSATION, "Đặt giúp mình lớp Hatha tối nay");
+
+        assertThat(a.message().actions()).containsExactly(Map.of("type", "BOOK_CLASS", "scheduleId", "s1", "label", "Hatha"));
+        assertThat(requests.getAllValues().get(0).history().get(0).text()).contains("người hỏi là học viên");
+        verify(usage).checkQuota(ME, false);
+    }
+
+    @Test
+    void conversationsAreSeparatedByAssistantKind() {
+        signedInAs("STUDENT");
+        when(provider.chat(any())).thenReturn(answer("Chào bạn"));
+        service.ask(CONVERSATION, "Xin chào");
+        verify(jdbc).queryForList(anyString(), argThat((SqlParameterSource p) -> p instanceof MapSqlParameterSource m
+                && "STUDENT_ASSISTANT".equals(m.getValue("kind"))), eq(String.class));
+    }
+
+    @Test
+    void receptionistsAndInstructorsHaveNoAssistant() {
+        signedInAs("RECEPTIONIST");
+        assertThatThrownBy(() -> service.ask(CONVERSATION, "Doanh thu?")).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.FORBIDDEN));
+        signedInAs("INSTRUCTOR");
+        assertThatThrownBy(service::conversations).isInstanceOf(BusinessException.class);
+        verify(provider, never()).chat(any());
     }
 }

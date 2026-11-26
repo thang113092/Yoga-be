@@ -79,3 +79,11 @@ services:
         sync: false
       - key: YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT
         sync: false
+      - key: YOGA_AI_STUDENT_CHAT_MODEL
+        sync: false
+      - key: YOGA_AI_STUDENT_CHAT_PRICE_INPUT
+        sync: false
+      - key: YOGA_AI_STUDENT_CHAT_PRICE_CACHED_INPUT
+        sync: false
+      - key: YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT
+        sync: false

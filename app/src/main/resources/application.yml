@@ -158,6 +158,16 @@ yoga:
         price-input: ${YOGA_AI_MANAGER_CHAT_PRICE_INPUT:}
         price-cached-input: ${YOGA_AI_MANAGER_CHAT_PRICE_CACHED_INPUT:}
         price-output: ${YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT:}
+      # Trợ lý cho học viên (tìm lớp, thẻ, lịch đã đặt, khóa học, video; chỉ đề xuất đặt chỗ). Để trống model thì tắt.
+      student-chat:
+        model: ${YOGA_AI_STUDENT_CHAT_MODEL:}
+        max-output-tokens: ${YOGA_AI_STUDENT_CHAT_MAX_OUTPUT:2048}
+        thinking-level: ${YOGA_AI_STUDENT_CHAT_THINKING_LEVEL:}
+        thinking-budget: ${YOGA_AI_STUDENT_CHAT_THINKING_BUDGET:}
+        max-tool-rounds: ${YOGA_AI_STUDENT_CHAT_TOOL_ROUNDS:6}
+        price-input: ${YOGA_AI_STUDENT_CHAT_PRICE_INPUT:}
+        price-cached-input: ${YOGA_AI_STUDENT_CHAT_PRICE_CACHED_INPUT:}
+        price-output: ${YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT:}
     quota:
       student-requests-per-day: ${YOGA_AI_STUDENT_DAILY_REQUESTS:30}
       staff-requests-per-day: ${YOGA_AI_STAFF_DAILY_REQUESTS:100}

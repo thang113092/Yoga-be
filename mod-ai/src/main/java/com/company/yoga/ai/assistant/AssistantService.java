@@ -11,18 +11,17 @@ import com.company.yoga.ai.AiUsageService;
 import com.company.yoga.ai.Prompts;
 import com.company.yoga.common.api.CommonErrorCode;
 import com.company.yoga.common.exception.BusinessException;
+import com.company.yoga.identity.account.entity.UserEntity;
+import com.company.yoga.identity.account.service.AccessPolicy;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -35,25 +34,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Manager assistant: a conversation where Gemini answers from report functions. One question may take several
- * provider calls (tool rounds); the new turns are stored together only when the answer is complete, so a failed
- * question leaves the conversation as it was. Provider calls run outside database transactions.
+ * Conversations with an assistant that answers by calling read-only functions. The caller's role chooses the
+ * {@link AssistantProfile} (manager or student): its model, prompt and tools. One question may take several provider
+ * calls (tool rounds); the new turns are stored together only when the answer is complete, so a failed question
+ * leaves the conversation as it was. Provider calls run outside database transactions.
  */
 @Service
 @Slf4j
-public class ManagerAssistantService {
+public class AssistantService {
 
-    static final String PROMPT = "manager-assistant";
-    static final String KIND = "MANAGER_ASSISTANT";
     public static final int MAX_QUESTION = 2000;
     static final int TITLE_LENGTH = 60;
+    /** Key a tool result may carry to offer the user a button (e.g. book this class); the assistant never acts itself. */
+    public static final String ACTION = "action";
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() { };
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("EEEE dd/MM/yyyy", Locale.forLanguageTag("vi"));
 
     public record Conversation(UUID id, String title, Instant createdAt, Instant lastMessageAt) {
     }
 
-    public record Message(String role, String text, List<String> toolsUsed, Instant createdAt) {
+    public record Message(String role, String text, List<String> toolsUsed, List<Map<String, Object>> actions, Instant createdAt) {
     }
 
     public record Answer(UUID conversationId, String title, Message message) {
@@ -63,74 +62,96 @@ public class ManagerAssistantService {
     private final AiProvider provider;
     private final AiUsageService usage;
     private final Prompts prompts;
-    private final ManagerReportTools reports;
+    private final List<AssistantProfile> profiles;
+    private final AccessPolicy accessPolicy;
     private final NamedParameterJdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final ObjectMapper json;
     private final Set<UUID> inFlight = ConcurrentHashMap.newKeySet();
 
-    public ManagerAssistantService(AiProperties properties, AiProvider provider, AiUsageService usage, Prompts prompts,
-                                   ManagerReportTools reports, NamedParameterJdbcTemplate jdbc, TransactionTemplate transactions,
-                                   ObjectMapper json) {
+    public AssistantService(AiProperties properties, AiProvider provider, AiUsageService usage, Prompts prompts,
+                            List<AssistantProfile> profiles, AccessPolicy accessPolicy, NamedParameterJdbcTemplate jdbc,
+                            TransactionTemplate transactions, ObjectMapper json) {
         this.properties = properties;
         this.provider = provider;
         this.usage = usage;
         this.prompts = prompts;
-        this.reports = reports;
+        this.profiles = List.copyOf(profiles);
+        this.accessPolicy = accessPolicy;
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.json = json;
     }
 
-    public boolean available() {
-        return properties.isOn(AiProperties.MANAGER_CHAT) && provider.isConfigured();
+    /** Whether the assistant of this feature (manager-chat, student-chat) is configured. */
+    public boolean available(String featureKey) {
+        return properties.isOn(featureKey) && provider.isConfigured();
+    }
+
+    record Session(AssistantProfile profile, AssistantProfile.Caller caller) {
+    }
+
+    /** The profile for the signed-in user's role; other roles (receptionist, instructor) have no assistant. */
+    Session session() {
+        UserEntity actor = accessPolicy.actor();
+        String role = accessPolicy.role(actor);
+        AssistantProfile profile = profiles.stream().filter(p -> p.accepts(role)).findFirst()
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.FORBIDDEN));
+        return new Session(profile, new AssistantProfile.Caller(actor.getId(), role, actor.getHomeBranchId()));
     }
 
     // ---------------------------------------------------------------- conversations
 
     public List<Conversation> conversations() {
-        ManagerReportTools.Scope me = reports.scope();
+        Session s = session();
         return jdbc.query("""
                 SELECT id,title,created_at,last_message_at FROM yoga.ai_conversations
                 WHERE user_id=:me AND kind=:kind ORDER BY last_message_at DESC LIMIT 30""",
-                new MapSqlParameterSource("me", me.userId()).addValue("kind", KIND),
+                new MapSqlParameterSource("me", s.caller().userId()).addValue("kind", s.profile().kind()),
                 (rs, i) -> new Conversation(rs.getObject("id", UUID.class), rs.getString("title"),
                         rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("last_message_at").toInstant()));
     }
 
     public Conversation create() {
-        if (!available()) throw new BusinessException(AiResultCodes.DISABLED);
-        ManagerReportTools.Scope me = reports.scope();
+        Session s = session();
+        if (!available(s.profile().featureKey())) throw new BusinessException(AiResultCodes.DISABLED);
         return jdbc.queryForObject("""
                 INSERT INTO yoga.ai_conversations(user_id,kind,title) VALUES(:me,:kind,'Hội thoại mới')
                 RETURNING id,title,created_at,last_message_at""",
-                new MapSqlParameterSource("me", me.userId()).addValue("kind", KIND),
+                new MapSqlParameterSource("me", s.caller().userId()).addValue("kind", s.profile().kind()),
                 (rs, i) -> new Conversation(rs.getObject("id", UUID.class), rs.getString("title"),
                         rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("last_message_at").toInstant()));
     }
 
     public void delete(UUID conversationId) {
-        UUID me = reports.scope().userId();
+        Session s = session();
         int deleted = jdbc.update("DELETE FROM yoga.ai_conversations WHERE id=:id AND user_id=:me AND kind=:kind",
-                new MapSqlParameterSource("id", conversationId).addValue("me", me).addValue("kind", KIND));
+                new MapSqlParameterSource("id", conversationId).addValue("me", s.caller().userId()).addValue("kind", s.profile().kind()));
         if (deleted == 0) throw new BusinessException(AiResultCodes.CONVERSATION_NOT_FOUND);
     }
 
-    /** What the user sees: questions and answers, not tool traffic. */
+    /** What the user sees: questions and answers, with the functions used and the buttons offered for each answer. */
     public List<Message> messages(UUID conversationId) {
-        owned(conversationId, reports.scope().userId());
+        Session s = session();
+        owned(conversationId, s);
         List<Message> out = new ArrayList<>();
         Set<String> tools = new LinkedHashSet<>();
-        for (Stored s : load(conversationId)) {
-            Turn t = s.turn();
-            if (t.role() == Role.USER) {
-                tools.clear();
-                out.add(new Message("USER", s.question(), List.of(), s.createdAt()));
-            } else if (t.role() == Role.MODEL) {
-                t.calls().forEach(c -> tools.add(c.name()));
-                if (t.text() != null && !t.text().isBlank()) {
-                    out.add(new Message("MODEL", t.text(), List.copyOf(tools), s.createdAt()));
+        List<Map<String, Object>> actions = new ArrayList<>();
+        for (Stored st : load(conversationId)) {
+            Turn t = st.turn();
+            switch (t.role()) {
+                case USER -> {
+                    tools.clear();
+                    actions.clear();
+                    out.add(new Message("USER", st.question(), List.of(), List.of(), st.createdAt()));
                 }
+                case MODEL -> {
+                    t.calls().forEach(c -> tools.add(c.name()));
+                    if (t.text() != null && !t.text().isBlank()) {
+                        out.add(new Message("MODEL", t.text(), List.copyOf(tools), List.copyOf(actions), st.createdAt()));
+                    }
+                }
+                case TOOL -> t.results().forEach(r -> actions.addAll(actions(r.response())));
             }
         }
         return out;
@@ -139,36 +160,39 @@ public class ManagerAssistantService {
     // ---------------------------------------------------------------- questions
 
     public Answer ask(UUID conversationId, String question) {
-        if (!available()) throw new BusinessException(AiResultCodes.DISABLED);
+        Session s = session();
+        if (!available(s.profile().featureKey())) throw new BusinessException(AiResultCodes.DISABLED);
         String q = question == null ? "" : question.trim();
         if (q.isEmpty() || q.length() > MAX_QUESTION) throw new BusinessException(CommonErrorCode.BAD_REQUEST);
-        ManagerReportTools.Scope me = reports.scope();
-        String title = owned(conversationId, me.userId());
+        String title = owned(conversationId, s);
         if (!inFlight.add(conversationId)) throw new BusinessException(AiResultCodes.CONVERSATION_BUSY);
         try {
             List<Stored> stored = load(conversationId);
             if (stored.size() + 3 > properties.conversations().maxMessages()) throw new BusinessException(AiResultCodes.CONVERSATION_FULL);
-            usage.checkQuota(me.userId(), true);
-            return run(conversationId, title, stored, q, me);
+            usage.checkQuota(s.caller().userId(), s.profile().staff());
+            return run(conversationId, title, stored, q, s);
         } finally {
             inFlight.remove(conversationId);
         }
     }
 
-    private Answer run(UUID conversationId, String title, List<Stored> stored, String question, ManagerReportTools.Scope me) {
-        AiProperties.Feature feature = properties.feature(AiProperties.MANAGER_CHAT);
-        Prompts.Prompt prompt = prompts.get(PROMPT);
+    private Answer run(UUID conversationId, String title, List<Stored> stored, String question, Session s) {
+        AssistantProfile profile = s.profile();
+        UUID me = s.caller().userId();
+        AiProperties.Feature feature = properties.feature(profile.featureKey());
+        Prompts.Prompt prompt = prompts.get(profile.prompt());
         Map<String, AiTool> tools = new LinkedHashMap<>();
-        reports.tools().forEach(t -> tools.put(t.spec().name(), t));
+        profile.tools().forEach(t -> tools.put(t.spec().name(), t));
         List<AiProvider.ToolSpec> specs = tools.values().stream().map(AiTool::spec).toList();
 
         List<Turn> history = new ArrayList<>(stored.stream().map(Stored::turn).toList());
         List<Pending> added = new ArrayList<>();
-        Turn userTurn = Turn.user(context(me) + "\n" + question);
+        Turn userTurn = Turn.user(profile.context(s.caller()) + "\n" + question);
         history.add(userTurn);
         added.add(new Pending(userTurn, question, null));
 
         Set<String> used = new LinkedHashSet<>();
+        List<Map<String, Object>> actions = new ArrayList<>();
         String answer = null;
         for (int round = 0; round <= feature.maxToolRounds() && answer == null; round++) {
             boolean allowTools = round < feature.maxToolRounds();
@@ -177,7 +201,7 @@ public class ManagerAssistantService {
                 result = provider.chat(new AiProvider.ChatRequest(feature.model(), prompt.text(), List.copyOf(history), specs, allowTools,
                         feature.maxOutputTokens(), feature.thinkingLevel(), feature.thinkingBudget()));
             } catch (AiProvider.ProviderException e) {
-                if (e.usage().inputTokens() > 0 || e.usage().outputTokens() > 0) usage.record(me.userId(), feature, e.usage(), round == 0);
+                if (e.usage().inputTokens() > 0 || e.usage().outputTokens() > 0) usage.record(me, feature, e.usage(), round == 0);
                 throw new BusinessException(switch (e.failure()) {
                     case BLOCKED -> AiResultCodes.BLOCKED;
                     case TRUNCATED -> AiResultCodes.TRUNCATED;
@@ -185,7 +209,7 @@ public class ManagerAssistantService {
                     default -> AiResultCodes.PROVIDER_ERROR;
                 });
             }
-            usage.record(me.userId(), feature, result.usage(), round == 0);
+            usage.record(me, feature, result.usage(), round == 0);
             Turn model = result.turn();
             if (!allowTools && !model.calls().isEmpty()) {
                 // Calls without results would break the next question: keep only the text of a forced last turn.
@@ -194,14 +218,17 @@ public class ManagerAssistantService {
             history.add(model);
             added.add(new Pending(model, null, result));
 
-            if (model.calls().isEmpty() || !allowTools) {
-                answer = model.text() == null || model.text().isBlank() ? "Xin lỗi, tôi chưa trả lời được câu này. Bạn thử hỏi cụ thể hơn nhé." : model.text();
+            if (model.calls().isEmpty()) {
+                answer = model.text() == null || model.text().isBlank()
+                        ? "Xin lỗi, tôi chưa trả lời được câu này. Bạn thử hỏi cụ thể hơn nhé." : model.text();
                 break;
             }
             List<ToolResult> results = new ArrayList<>();
             for (ToolCall call : model.calls()) {
                 used.add(call.name());
-                results.add(new ToolResult(call.id(), call.name(), runTool(tools.get(call.name()), call)));
+                Map<String, Object> response = runTool(tools.get(call.name()), call);
+                actions.addAll(actions(response));
+                results.add(new ToolResult(call.id(), call.name(), response));
             }
             Turn toolTurn = Turn.tool(results);
             history.add(toolTurn);
@@ -210,8 +237,8 @@ public class ManagerAssistantService {
         if (answer == null) throw new BusinessException(AiResultCodes.PROVIDER_ERROR);
 
         String newTitle = stored.isEmpty() ? title(question) : title;
-        save(conversationId, stored.size(), added, newTitle);
-        return new Answer(conversationId, newTitle, new Message("MODEL", answer, List.copyOf(used), Instant.now()));
+        save(conversationId, stored.size(), added, newTitle, feature.model());
+        return new Answer(conversationId, newTitle, new Message("MODEL", answer, List.copyOf(used), List.copyOf(actions), Instant.now()));
     }
 
     /** Runs one tool; refusals and bad arguments go back to the model as an error it can explain. */
@@ -227,15 +254,13 @@ public class ManagerAssistantService {
             return Map.of("error", "Không có quyền xem số liệu này");
         } catch (RuntimeException e) {
             log.error("Assistant tool {} failed", call.name(), e);
-            return Map.of("error", "Hệ thống lỗi khi lấy số liệu; hãy báo người dùng thử lại sau");
+            return Map.of("error", "Hệ thống lỗi khi lấy dữ liệu; hãy báo người dùng thử lại sau");
         }
     }
 
-    /** Today's date and the asker's scope, at the start of each question (not in the system prompt, to keep it cacheable). */
-    static String context(ManagerReportTools.Scope me) {
-        LocalDate today = LocalDate.now(ManagerReportTools.VIETNAM);
-        return "[Ngữ cảnh: hôm nay là " + DAY.format(today) + " (" + today + "), giờ Việt Nam; người hỏi là "
-                + (me.superAdmin() ? "chủ chuỗi, xem được mọi chi nhánh" : "quản lý chi nhánh, chỉ xem được chi nhánh của mình") + "]";
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> actions(Map<String, Object> response) {
+        return response != null && response.get(ACTION) instanceof Map<?, ?> m ? List.of((Map<String, Object>) m) : List.of();
     }
 
     static String title(String question) {
@@ -251,9 +276,10 @@ public class ManagerAssistantService {
     record Pending(Turn turn, String question, AiProvider.ChatResult result) {
     }
 
-    private String owned(UUID conversationId, UUID me) {
+    private String owned(UUID conversationId, Session s) {
         List<String> titles = jdbc.queryForList("SELECT title FROM yoga.ai_conversations WHERE id=:id AND user_id=:me AND kind=:kind",
-                new MapSqlParameterSource("id", conversationId).addValue("me", me).addValue("kind", KIND), String.class);
+                new MapSqlParameterSource("id", conversationId).addValue("me", s.caller().userId()).addValue("kind", s.profile().kind()),
+                String.class);
         if (titles.isEmpty()) throw new BusinessException(AiResultCodes.CONVERSATION_NOT_FOUND);
         return titles.get(0);
     }
@@ -273,7 +299,7 @@ public class ManagerAssistantService {
                 });
     }
 
-    private void save(UUID conversationId, int alreadyStored, List<Pending> added, String title) {
+    private void save(UUID conversationId, int alreadyStored, List<Pending> added, String title, String model) {
         transactions.executeWithoutResult(tx -> {
             int seq = alreadyStored;
             for (Pending p : added) {
@@ -285,7 +311,7 @@ public class ManagerAssistantService {
                         new MapSqlParameterSource("c", conversationId).addValue("seq", seq).addValue("role", p.turn().role().name())
                                 .addValue("content", write(content(p)))
                                 .addValue("provider", r == null ? null : provider.name())
-                                .addValue("model", r == null ? null : properties.feature(AiProperties.MANAGER_CHAT).model())
+                                .addValue("model", r == null ? null : model)
                                 .addValue("input", r == null ? 0 : (int) Math.min(Integer.MAX_VALUE, r.usage().inputTokens()))
                                 .addValue("output", r == null ? 0 : (int) Math.min(Integer.MAX_VALUE, r.usage().outputTokens()))
                                 .addValue("finish", r == null ? null : r.finishReason()));

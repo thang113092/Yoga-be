@@ -12,14 +12,15 @@ class AiConfigTest {
 
     private static final AiProperties.Gemini KEY = new AiProperties.Gemini("k", "https://g.test", 60, 2);
     private static final AiProperties.Quota QUOTA = new AiProperties.Quota(30, 100, new BigDecimal("20"), 80);
+    private static final AiProperties.Conversations CONV = new AiProperties.Conversations(30, 60);
 
     private static AiProperties.Feature feature(String model, String in, String cached, String out) {
         return new AiProperties.Feature(model, 1024, null, null, in == null ? null : new BigDecimal(in),
-                cached == null ? null : new BigDecimal(cached), out == null ? null : new BigDecimal(out));
+                cached == null ? null : new BigDecimal(cached), out == null ? null : new BigDecimal(out), 8);
     }
 
     private static AiProperties props(boolean enabled, AiProperties.Gemini gemini, AiProperties.Feature tagging) {
-        return new AiProperties(enabled, "gemini", gemini, tagging == null ? Map.of() : Map.of(AiProperties.VIDEO_TAGGING, tagging), QUOTA);
+        return new AiProperties(enabled, "gemini", gemini, tagging == null ? Map.of() : Map.of(AiProperties.VIDEO_TAGGING, tagging), QUOTA, CONV);
     }
 
     @Test
@@ -50,7 +51,7 @@ class AiConfigTest {
 
     @Test
     void unknownFeatureIsRejected() {
-        var p = new AiProperties(true, "gemini", KEY, Map.of("chat", feature("m", "1", null, "1")), QUOTA);
+        var p = new AiProperties(true, "gemini", KEY, Map.of("chat", feature("m", "1", null, "1")), QUOTA, CONV);
         assertThatThrownBy(p::validate).hasMessageContaining("unknown feature");
     }
 

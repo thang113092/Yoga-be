@@ -33,7 +33,7 @@ class VideoTaggingServiceTest {
     private static final VideoDto.Tag STRETCH = new VideoDto.Tag(UUID.randomUUID(), "STRETCHING", "Giãn cơ", 3);
     private static final VideoDto.Tag SPINE = new VideoDto.Tag(UUID.randomUUID(), "SPINE", "Cột sống", 1);
     private static final AiProperties.Feature FEATURE = new AiProperties.Feature("test-model", 512, null, null,
-            new BigDecimal("0.3"), null, new BigDecimal("2.5"));
+            new BigDecimal("0.3"), null, new BigDecimal("2.5"), 8);
 
     private final AiProvider provider = mock(AiProvider.class);
     private final AiUsageService usage = mock(AiUsageService.class);
@@ -50,7 +50,7 @@ class VideoTaggingServiceTest {
 
     private static AiProperties props(boolean enabled) {
         return new AiProperties(enabled, "gemini", new AiProperties.Gemini("k", "u", 60, 0),
-                Map.of(AiProperties.VIDEO_TAGGING, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80));
+                Map.of(AiProperties.VIDEO_TAGGING, FEATURE), new AiProperties.Quota(30, 100, BigDecimal.TEN, 80), new AiProperties.Conversations(30, 60));
     }
 
     @BeforeEach

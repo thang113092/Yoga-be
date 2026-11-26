@@ -66,14 +66,23 @@ public class AiUsageService {
 
     /** Adds one request to today's counters and returns its cost in micro USD. */
     public long record(UUID userId, AiProperties.Feature feature, AiProvider.Usage usage) {
+        return record(userId, feature, usage, true);
+    }
+
+    /**
+     * @param countRequest false for the further provider calls of one question (tool rounds): tokens and cost are
+     *                     added, the user's daily request count is not
+     */
+    public long record(UUID userId, AiProperties.Feature feature, AiProvider.Usage usage, boolean countRequest) {
         long cost = cost(feature, usage);
         jdbc.update("""
                 INSERT INTO yoga.ai_usage_daily AS u(user_id,usage_date,requests,input_tokens,cached_tokens,output_tokens,cost_micro_usd)
-                VALUES(:user,:day,1,:input,:cached,:output,:cost)
-                ON CONFLICT (user_id,usage_date) DO UPDATE SET requests=u.requests+1,
+                VALUES(:user,:day,:requests,:input,:cached,:output,:cost)
+                ON CONFLICT (user_id,usage_date) DO UPDATE SET requests=u.requests+EXCLUDED.requests,
                   input_tokens=u.input_tokens+EXCLUDED.input_tokens, cached_tokens=u.cached_tokens+EXCLUDED.cached_tokens,
                   output_tokens=u.output_tokens+EXCLUDED.output_tokens, cost_micro_usd=u.cost_micro_usd+EXCLUDED.cost_micro_usd""",
-                new MapSqlParameterSource("user", userId).addValue("day", today()).addValue("input", usage.inputTokens())
+                new MapSqlParameterSource("user", userId).addValue("day", today()).addValue("requests", countRequest ? 1 : 0)
+                        .addValue("input", usage.inputTokens())
                         .addValue("cached", usage.cachedTokens()).addValue("output", usage.outputTokens()).addValue("cost", cost));
         warnNearBudget(cost);
         return cost;

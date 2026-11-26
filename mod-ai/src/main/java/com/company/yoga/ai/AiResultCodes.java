@@ -15,7 +15,11 @@ public enum AiResultCodes implements ErrorCode {
     BUSY("AI_503_BUSY", 503, "Dịch vụ AI đang quá tải. Vui lòng thử lại sau ít phút", "ai.busy"),
     PROVIDER_ERROR("AI_502_PROVIDER", 502, "Dịch vụ AI tạm thời không phản hồi đúng. Vui lòng thử lại sau", "ai.provider-error"),
     SUGGESTION_NOT_FOUND("AI_404_SUGGESTION", 404, "Không tìm thấy gợi ý", "ai.suggestion-not-found"),
-    SUGGESTION_REVIEWED("AI_409_REVIEWED", 409, "Gợi ý này đã được xử lý", "ai.suggestion-reviewed");
+    SUGGESTION_REVIEWED("AI_409_REVIEWED", 409, "Gợi ý này đã được xử lý", "ai.suggestion-reviewed"),
+    TRUNCATED("AI_422_TRUNCATED", 422, "Câu trả lời quá dài nên bị cắt. Hãy hỏi hẹp hơn, ví dụ một chi nhánh hoặc một tháng", "ai.truncated"),
+    CONVERSATION_NOT_FOUND("AI_404_CONVERSATION", 404, "Không tìm thấy hội thoại", "ai.conversation-not-found"),
+    CONVERSATION_FULL("AI_409_CONVERSATION_FULL", 409, "Hội thoại đã quá dài. Hãy bắt đầu hội thoại mới", "ai.conversation-full"),
+    CONVERSATION_BUSY("AI_409_CONVERSATION_BUSY", 409, "Trợ lý đang trả lời câu hỏi trước. Vui lòng đợi", "ai.conversation-busy");
 
     private final String code;
     private final int httpStatusCode;

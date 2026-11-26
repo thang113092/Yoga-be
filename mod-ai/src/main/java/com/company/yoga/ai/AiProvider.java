@@ -1,5 +1,6 @@
 package com.company.yoga.ai;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -15,6 +16,51 @@ public interface AiProvider {
 
     /** One request whose answer must be a JSON object matching {@code responseSchema}. */
     Result generateJson(JsonRequest request);
+
+    /**
+     * One model turn of a conversation that may call tools. The caller runs the requested tools and calls again with
+     * their results appended. Returns the model turn to store and replay unchanged.
+     */
+    ChatResult chat(ChatRequest request);
+
+    /** A function the model may call; {@code parameters} uses the same schema subset as {@link JsonRequest}. */
+    record ToolSpec(String name, String description, Map<String, Object> parameters) {
+    }
+
+    enum Role { USER, MODEL, TOOL }
+
+    record ToolCall(String id, String name, Map<String, Object> args) {
+    }
+
+    record ToolResult(String id, String name, Map<String, Object> response) {
+    }
+
+    /**
+     * One stored turn. USER has text; MODEL has text and/or calls plus {@code raw}, the provider's own encoding that
+     * must be replayed verbatim (it carries signatures of the model's reasoning); TOOL has results.
+     */
+    record Turn(Role role, String text, List<ToolCall> calls, List<ToolResult> results, Object raw) {
+        public static Turn user(String text) {
+            return new Turn(Role.USER, text, List.of(), List.of(), null);
+        }
+
+        public static Turn tool(List<ToolResult> results) {
+            return new Turn(Role.TOOL, null, List.of(), results, null);
+        }
+
+        public Turn {
+            calls = calls == null ? List.of() : List.copyOf(calls);
+            results = results == null ? List.of() : List.copyOf(results);
+        }
+    }
+
+    /** @param allowTools false forces a text answer (used for the last round) */
+    record ChatRequest(String model, String systemInstruction, List<Turn> history, List<ToolSpec> tools, boolean allowTools,
+                       int maxOutputTokens, String thinkingLevel, Integer thinkingBudget) {
+    }
+
+    record ChatResult(Turn turn, String finishReason, Usage usage) {
+    }
 
     /**
      * @param responseSchema schema of the answer, in the provider-neutral subset: type (object/array/string/integer/

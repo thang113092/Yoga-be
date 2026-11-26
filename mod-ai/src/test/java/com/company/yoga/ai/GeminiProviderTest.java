@@ -136,4 +136,70 @@ class GeminiProviderTest {
         assertThat(noKey.isConfigured()).isFalse();
         assertThatThrownBy(() -> noKey.generateJson(request(null, null))).isInstanceOf(ProviderException.class);
     }
+
+    // ---------------------------------------------------------------- chat with tools
+
+    private static final AiProvider.ToolSpec BRANCHES = new AiProvider.ToolSpec("list_branches", "Danh sách chi nhánh", null);
+    private static final AiProvider.ToolSpec REVENUE = new AiProvider.ToolSpec("get_revenue_report", "Doanh thu",
+            Map.of("type", "object", "properties", Map.of("startDate", Map.of("type", "string")), "required", List.of("startDate")));
+
+    @Test
+    void chatDeclaresToolsAndReplaysEarlierTurnsVerbatim() throws Exception {
+        var raw = new com.fasterxml.jackson.databind.ObjectMapper().readTree("""
+                [{"functionCall":{"id":"c1","name":"list_branches","args":{}},"thoughtSignature":"sig-1"}]""");
+        var history = List.of(
+                AiProvider.Turn.user("Doanh thu?"),
+                new AiProvider.Turn(AiProvider.Role.MODEL, "", List.of(new AiProvider.ToolCall("c1", "list_branches", Map.of())), List.of(), raw),
+                AiProvider.Turn.tool(List.of(new AiProvider.ToolResult("c1", "list_branches", Map.of("branches", List.of())))));
+        server.expect(requestTo(URL)).andExpect(content().json("""
+                {"systemInstruction":{"parts":[{"text":"Trợ lý"}]},
+                 "contents":[{"role":"user","parts":[{"text":"Doanh thu?"}]},
+                   {"role":"model","parts":[{"functionCall":{"id":"c1","name":"list_branches","args":{}},"thoughtSignature":"sig-1"}]},
+                   {"role":"user","parts":[{"functionResponse":{"id":"c1","name":"list_branches","response":{"branches":[]}}}]}],
+                 "tools":[{"functionDeclarations":[{"name":"list_branches","description":"Danh sách chi nhánh"},
+                   {"name":"get_revenue_report","description":"Doanh thu",
+                    "parameters":{"type":"OBJECT","properties":{"startDate":{"type":"STRING"}},"required":["startDate"]}}]}],
+                 "toolConfig":{"functionCallingConfig":{"mode":"AUTO"}},
+                 "generationConfig":{"maxOutputTokens":1024}}""", true))
+                .andRespond(withSuccess("""
+                        {"candidates":[{"content":{"role":"model","parts":[{"text":"Doanh thu là **1.000.000 đ**."}]},"finishReason":"STOP"}],
+                         "usageMetadata":{"promptTokenCount":500,"candidatesTokenCount":20}}""", MediaType.APPLICATION_JSON));
+
+        var result = gemini.chat(new AiProvider.ChatRequest("test-model", "Trợ lý", history, List.of(BRANCHES, REVENUE), true, 1024, null, null));
+
+        assertThat(result.turn().text()).isEqualTo("Doanh thu là **1.000.000 đ**.");
+        assertThat(result.turn().calls()).isEmpty();
+        assertThat(result.usage()).isEqualTo(new AiProvider.Usage(500, 0, 20));
+        server.verify();
+    }
+
+    @Test
+    void chatReturnsCallsAndKeepsTheRawPartsWithSignatures() {
+        server.expect(requestTo(URL)).andRespond(withSuccess("""
+                {"candidates":[{"content":{"role":"model","parts":[
+                   {"text":"plan","thought":true},
+                   {"functionCall":{"name":"get_revenue_report","args":{"startDate":"2026-10-01","endDate":"2026-10-31"}},"thoughtSignature":"abc"}]},
+                  "finishReason":"STOP"}]}""", MediaType.APPLICATION_JSON));
+        var result = gemini.chat(new AiProvider.ChatRequest("test-model", "s", List.of(AiProvider.Turn.user("q")), List.of(REVENUE), true, 512, "low", null));
+        assertThat(result.turn().text()).isEmpty();
+        assertThat(result.turn().calls()).singleElement().satisfies(c -> {
+            assertThat(c.name()).isEqualTo("get_revenue_report");
+            assertThat(c.args()).containsEntry("endDate", "2026-10-31");
+        });
+        assertThat(result.turn().raw().toString()).contains("\"thoughtSignature\":\"abc\"").contains("\"thought\":true");
+    }
+
+    @Test
+    void lastRoundForbidsTools() {
+        assertThat(GeminiProvider.body(new AiProvider.ChatRequest("m", "s", List.of(AiProvider.Turn.user("q")), List.of(REVENUE), false, 512, null, null)))
+                .containsEntry("toolConfig", Map.of("functionCallingConfig", Map.of("mode", "NONE")));
+    }
+
+    @Test
+    void malformedCallIsABadResponse() {
+        server.expect(requestTo(URL)).andRespond(withSuccess("""
+                {"candidates":[{"finishReason":"MALFORMED_FUNCTION_CALL"}]}""", MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> gemini.chat(new AiProvider.ChatRequest("test-model", "s", List.of(AiProvider.Turn.user("q")), List.of(REVENUE), true, 512, null, null)))
+                .isInstanceOfSatisfying(ProviderException.class, e -> assertThat(e.failure()).isEqualTo(Failure.BAD_RESPONSE));
+    }
 }

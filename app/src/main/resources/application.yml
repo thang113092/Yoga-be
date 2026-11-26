@@ -147,12 +147,28 @@ yoga:
         price-input: ${YOGA_AI_TAGGING_PRICE_INPUT:}
         price-cached-input: ${YOGA_AI_TAGGING_PRICE_CACHED_INPUT:}
         price-output: ${YOGA_AI_TAGGING_PRICE_OUTPUT:}
+      # Trợ lý số liệu cho chủ chuỗi và quản lý chi nhánh (hỏi doanh thu, lớp online, sĩ số). Để trống model thì tắt.
+      manager-chat:
+        model: ${YOGA_AI_MANAGER_CHAT_MODEL:}
+        max-output-tokens: ${YOGA_AI_MANAGER_CHAT_MAX_OUTPUT:4096}
+        thinking-level: ${YOGA_AI_MANAGER_CHAT_THINKING_LEVEL:}
+        thinking-budget: ${YOGA_AI_MANAGER_CHAT_THINKING_BUDGET:}
+        # Số lần gọi hàm báo cáo tối đa cho một câu hỏi; lần cuối buộc trả lời bằng lời.
+        max-tool-rounds: ${YOGA_AI_MANAGER_CHAT_TOOL_ROUNDS:8}
+        price-input: ${YOGA_AI_MANAGER_CHAT_PRICE_INPUT:}
+        price-cached-input: ${YOGA_AI_MANAGER_CHAT_PRICE_CACHED_INPUT:}
+        price-output: ${YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT:}
     quota:
       student-requests-per-day: ${YOGA_AI_STUDENT_DAILY_REQUESTS:30}
       staff-requests-per-day: ${YOGA_AI_STAFF_DAILY_REQUESTS:100}
       # Trần chi phí toàn hệ thống mỗi ngày (giờ VN), USD; vượt thì tạm dừng AI đến 0h. 0 = không giới hạn.
       daily-budget-usd: ${YOGA_AI_DAILY_BUDGET_USD:20}
       alert-percent: ${YOGA_AI_BUDGET_ALERT_PERCENT:80}
+    conversations:
+      # Hội thoại không dùng quá số ngày này thì tự xóa (job chạy 2:30 sáng giờ VN).
+      retention-days: ${YOGA_AI_RETENTION_DAYS:30}
+      # Số lượt lưu tối đa mỗi hội thoại (câu hỏi, câu trả lời, kết quả hàm); vượt thì phải mở hội thoại mới.
+      max-messages: ${YOGA_AI_MAX_MESSAGES:60}
 
 supabase:
   url: ${SUPABASE_URL:https://cagwkxiccmayrtajwdtc.supabase.co}

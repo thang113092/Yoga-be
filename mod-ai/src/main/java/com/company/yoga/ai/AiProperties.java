@@ -15,10 +15,13 @@ public record AiProperties(
         @DefaultValue("gemini") String provider,
         @DefaultValue Gemini gemini,
         Map<String, Feature> features,
-        @DefaultValue Quota quota) {
+        @DefaultValue Quota quota,
+        @DefaultValue Conversations conversations) {
 
     /** Feature keys used in code; the configuration may only add these. */
     public static final String VIDEO_TAGGING = "video-tagging";
+    public static final String MANAGER_CHAT = "manager-chat";
+    private static final java.util.Set<String> KNOWN = java.util.Set.of(VIDEO_TAGGING, MANAGER_CHAT);
 
     public record Gemini(
             @DefaultValue("") String apiKey,
@@ -38,7 +41,9 @@ public record AiProperties(
             Integer thinkingBudget,
             BigDecimal priceInput,
             BigDecimal priceCachedInput,
-            BigDecimal priceOutput) {
+            BigDecimal priceOutput,
+            /** Chat features: tool calls allowed for one question before a text answer is forced. */
+            @DefaultValue("8") int maxToolRounds) {
 
         public boolean hasModel() {
             return model != null && !model.isBlank();
@@ -51,6 +56,13 @@ public record AiProperties(
             /** Whole system per day (Vietnam time); 0 = no limit. */
             @DefaultValue("20") BigDecimal dailyBudgetUsd,
             @DefaultValue("80") int alertPercent) {
+    }
+
+    public record Conversations(
+            /** Conversations untouched for this long are deleted. */
+            @DefaultValue("30") int retentionDays,
+            /** Stored turns per conversation (questions, answers and tool results); then a new one must be started. */
+            @DefaultValue("60") int maxMessages) {
     }
 
     public AiProperties {
@@ -74,14 +86,16 @@ public record AiProperties(
         if (gemini.apiKey().isBlank()) throw new IllegalStateException("yoga.ai.enabled=true but GEMINI_API_KEY is empty");
         if (gemini.maxRetries() < 0 || gemini.timeoutSeconds() <= 0) throw new IllegalStateException("yoga.ai.gemini: invalid timeout/retries");
         features.forEach((key, feature) -> {
-            if (!VIDEO_TAGGING.equals(key)) throw new IllegalStateException("yoga.ai.features." + key + ": unknown feature");
+            if (!KNOWN.contains(key)) throw new IllegalStateException("yoga.ai.features." + key + ": unknown feature");
             if (!feature.hasModel()) return;
             if (feature.priceInput() == null || feature.priceOutput() == null) {
                 throw new IllegalStateException("yoga.ai.features." + key + ": model " + feature.model()
                         + " has no price-input/price-output; set them from the provider's price list");
             }
             if (feature.maxOutputTokens() <= 0) throw new IllegalStateException("yoga.ai.features." + key + ".max-output-tokens must be > 0");
+            if (feature.maxToolRounds() < 1 || feature.maxToolRounds() > 20) throw new IllegalStateException("yoga.ai.features." + key + ".max-tool-rounds must be 1-20");
         });
+        if (conversations.retentionDays() < 1 || conversations.maxMessages() < 4) throw new IllegalStateException("yoga.ai.conversations: invalid limits");
         if (quota.dailyBudgetUsd().signum() < 0) throw new IllegalStateException("yoga.ai.quota.daily-budget-usd must be >= 0");
     }
 }

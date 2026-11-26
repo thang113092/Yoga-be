@@ -7,18 +7,6 @@ SUPABASE_PUBLISHABLE_KEY=REPLACE_WITH_PUBLIC_KEY
 # Backend only: required to create/migrate staff accounts. Never expose in frontend.
 SUPABASE_SERVICE_ROLE_KEY=
 YOGA_CORS_ORIGINS=http://localhost:4300,http://127.0.0.1:4300
-# AI (Gemini). Khóa gói trả phí; để false thì tắt AI.
+# AI (Gemini): chỉ cần 2 biến này để bật cả 4 tính năng với mô hình mặc định gemini-3.5-flash-lite (xem .env.example để đổi mô hình hoặc tắt riêng).
 YOGA_AI_ENABLED=false
 GEMINI_API_KEY=
-YOGA_AI_TAGGING_MODEL=
-YOGA_AI_TAGGING_PRICE_INPUT=
-YOGA_AI_TAGGING_PRICE_OUTPUT=
-YOGA_AI_MANAGER_CHAT_MODEL=
-YOGA_AI_MANAGER_CHAT_PRICE_INPUT=
-YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT=
-YOGA_AI_STUDENT_CHAT_MODEL=
-YOGA_AI_STUDENT_CHAT_PRICE_INPUT=
-YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT=
-YOGA_AI_STAFF_CHAT_MODEL=
-YOGA_AI_STAFF_CHAT_PRICE_INPUT=
-YOGA_AI_STAFF_CHAT_PRICE_OUTPUT=

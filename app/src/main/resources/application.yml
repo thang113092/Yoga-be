@@ -136,48 +136,50 @@ yoga:
       max-retries: ${YOGA_AI_MAX_RETRIES:2}
     features:
       # Gợi ý chủ đề/cấp độ/mô tả/lưu ý an toàn cho video. Để trống model thì tắt riêng tính năng này.
-      # Chỉ dùng mô hình ổn định (không preview/exp); đổi mô hình hoặc prompt thì chạy lại bộ mẫu đánh giá.
+      # Mặc định cả 4 tính năng dùng gemini-3.5-flash-lite (bản ổn định) với giá Google ngày 26/11/2026, nên chỉ cần
+      # YOGA_AI_ENABLED=true và GEMINI_API_KEY là bật tất cả. Đặt biến ..._MODEL thành rỗng để tắt riêng một tính năng;
+      # đổi mô hình thì đổi luôn 3 biến giá theo bảng giá Google và chạy lại bộ mẫu đánh giá. Chỉ dùng mô hình ổn định.
       video-tagging:
-        model: ${YOGA_AI_TAGGING_MODEL:}
+        model: ${YOGA_AI_TAGGING_MODEL:gemini-3.5-flash-lite}
         max-output-tokens: ${YOGA_AI_TAGGING_MAX_OUTPUT:2048}
         # Chỉ gửi khi đặt giá trị; dùng thinking-level hoặc thinking-budget tùy mô hình hỗ trợ.
         thinking-level: ${YOGA_AI_TAGGING_THINKING_LEVEL:}
         thinking-budget: ${YOGA_AI_TAGGING_THINKING_BUDGET:}
-        # Giá USD cho 1 triệu token theo bảng giá Google của đúng mô hình trên. Bắt buộc khi có model.
-        price-input: ${YOGA_AI_TAGGING_PRICE_INPUT:}
-        price-cached-input: ${YOGA_AI_TAGGING_PRICE_CACHED_INPUT:}
-        price-output: ${YOGA_AI_TAGGING_PRICE_OUTPUT:}
+        # Giá USD cho 1 triệu token theo bảng giá Google của đúng mô hình trên (bắt buộc khi có model).
+        price-input: ${YOGA_AI_TAGGING_PRICE_INPUT:0.30}
+        price-cached-input: ${YOGA_AI_TAGGING_PRICE_CACHED_INPUT:0.03}
+        price-output: ${YOGA_AI_TAGGING_PRICE_OUTPUT:2.50}
       # Trợ lý số liệu cho chủ chuỗi và quản lý chi nhánh (hỏi doanh thu, lớp online, sĩ số). Để trống model thì tắt.
       manager-chat:
-        model: ${YOGA_AI_MANAGER_CHAT_MODEL:}
+        model: ${YOGA_AI_MANAGER_CHAT_MODEL:gemini-3.5-flash-lite}
         max-output-tokens: ${YOGA_AI_MANAGER_CHAT_MAX_OUTPUT:4096}
         thinking-level: ${YOGA_AI_MANAGER_CHAT_THINKING_LEVEL:}
         thinking-budget: ${YOGA_AI_MANAGER_CHAT_THINKING_BUDGET:}
         # Số lần gọi hàm báo cáo tối đa cho một câu hỏi; lần cuối buộc trả lời bằng lời.
         max-tool-rounds: ${YOGA_AI_MANAGER_CHAT_TOOL_ROUNDS:8}
-        price-input: ${YOGA_AI_MANAGER_CHAT_PRICE_INPUT:}
-        price-cached-input: ${YOGA_AI_MANAGER_CHAT_PRICE_CACHED_INPUT:}
-        price-output: ${YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT:}
+        price-input: ${YOGA_AI_MANAGER_CHAT_PRICE_INPUT:0.30}
+        price-cached-input: ${YOGA_AI_MANAGER_CHAT_PRICE_CACHED_INPUT:0.03}
+        price-output: ${YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT:2.50}
       # Trợ lý cho học viên (tìm lớp, thẻ, lịch đã đặt, khóa học, video; chỉ đề xuất đặt chỗ). Để trống model thì tắt.
       student-chat:
-        model: ${YOGA_AI_STUDENT_CHAT_MODEL:}
+        model: ${YOGA_AI_STUDENT_CHAT_MODEL:gemini-3.5-flash-lite}
         max-output-tokens: ${YOGA_AI_STUDENT_CHAT_MAX_OUTPUT:2048}
         thinking-level: ${YOGA_AI_STUDENT_CHAT_THINKING_LEVEL:}
         thinking-budget: ${YOGA_AI_STUDENT_CHAT_THINKING_BUDGET:}
         max-tool-rounds: ${YOGA_AI_STUDENT_CHAT_TOOL_ROUNDS:6}
-        price-input: ${YOGA_AI_STUDENT_CHAT_PRICE_INPUT:}
-        price-cached-input: ${YOGA_AI_STUDENT_CHAT_PRICE_CACHED_INPUT:}
-        price-output: ${YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT:}
+        price-input: ${YOGA_AI_STUDENT_CHAT_PRICE_INPUT:0.30}
+        price-cached-input: ${YOGA_AI_STUDENT_CHAT_PRICE_CACHED_INPUT:0.03}
+        price-output: ${YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT:2.50}
       # Trợ lý cho lễ tân (lịch chi nhánh, danh sách lớp, thẻ/lịch học viên) và HLV (lịch dạy, danh sách lớp). Để trống model thì tắt.
       staff-chat:
-        model: ${YOGA_AI_STAFF_CHAT_MODEL:}
+        model: ${YOGA_AI_STAFF_CHAT_MODEL:gemini-3.5-flash-lite}
         max-output-tokens: ${YOGA_AI_STAFF_CHAT_MAX_OUTPUT:2048}
         thinking-level: ${YOGA_AI_STAFF_CHAT_THINKING_LEVEL:}
         thinking-budget: ${YOGA_AI_STAFF_CHAT_THINKING_BUDGET:}
         max-tool-rounds: ${YOGA_AI_STAFF_CHAT_TOOL_ROUNDS:6}
-        price-input: ${YOGA_AI_STAFF_CHAT_PRICE_INPUT:}
-        price-cached-input: ${YOGA_AI_STAFF_CHAT_PRICE_CACHED_INPUT:}
-        price-output: ${YOGA_AI_STAFF_CHAT_PRICE_OUTPUT:}
+        price-input: ${YOGA_AI_STAFF_CHAT_PRICE_INPUT:0.30}
+        price-cached-input: ${YOGA_AI_STAFF_CHAT_PRICE_CACHED_INPUT:0.03}
+        price-output: ${YOGA_AI_STAFF_CHAT_PRICE_OUTPUT:2.50}
     quota:
       student-requests-per-day: ${YOGA_AI_STUDENT_DAILY_REQUESTS:30}
       staff-requests-per-day: ${YOGA_AI_STAFF_DAILY_REQUESTS:100}

@@ -61,37 +61,5 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: YOGA_AI_TAGGING_MODEL
-        sync: false
-      - key: YOGA_AI_TAGGING_PRICE_INPUT
-        sync: false
-      - key: YOGA_AI_TAGGING_PRICE_CACHED_INPUT
-        sync: false
-      - key: YOGA_AI_TAGGING_PRICE_OUTPUT
-        sync: false
       - key: YOGA_AI_DAILY_BUDGET_USD
-        sync: false
-      - key: YOGA_AI_MANAGER_CHAT_MODEL
-        sync: false
-      - key: YOGA_AI_MANAGER_CHAT_PRICE_INPUT
-        sync: false
-      - key: YOGA_AI_MANAGER_CHAT_PRICE_CACHED_INPUT
-        sync: false
-      - key: YOGA_AI_MANAGER_CHAT_PRICE_OUTPUT
-        sync: false
-      - key: YOGA_AI_STUDENT_CHAT_MODEL
-        sync: false
-      - key: YOGA_AI_STUDENT_CHAT_PRICE_INPUT
-        sync: false
-      - key: YOGA_AI_STUDENT_CHAT_PRICE_CACHED_INPUT
-        sync: false
-      - key: YOGA_AI_STUDENT_CHAT_PRICE_OUTPUT
-        sync: false
-      - key: YOGA_AI_STAFF_CHAT_MODEL
-        sync: false
-      - key: YOGA_AI_STAFF_CHAT_PRICE_INPUT
-        sync: false
-      - key: YOGA_AI_STAFF_CHAT_PRICE_CACHED_INPUT
-        sync: false
-      - key: YOGA_AI_STAFF_CHAT_PRICE_OUTPUT
         sync: false
